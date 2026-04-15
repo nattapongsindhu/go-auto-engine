@@ -2,139 +2,101 @@ name: ai-engine-balanced
 
 on:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: '0 3 * * *'   # SAFE: run once per day
   workflow_dispatch:
-
-concurrency:
-  group: ai-engine
-  cancel-in-progress: true
 
 permissions:
   contents: write
 
 jobs:
-
-  analyze:
+  engine:
     runs-on: ubuntu-latest
-    outputs:
-      temp: ${{ steps.data.outputs.temp }}
-      wind: ${{ steps.data.outputs.wind }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install jq
-        run: sudo apt-get install -y jq
-
+      # 1. Fetch weather
       - name: Fetch weather
-        id: data
         run: |
           curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
 
-          TEMP=$(jq '.current_weather.temperature | floor' weather.json)
-          WIND=$(jq '.current_weather.windspeed | floor' weather.json)
-
-          echo "temp=$TEMP" >> $GITHUB_OUTPUT
-          echo "wind=$WIND" >> $GITHUB_OUTPUT
-
-  decide:
-    runs-on: ubuntu-latest
-    needs: analyze
-    outputs:
-      status: ${{ steps.decision.outputs.status }}
-
-    steps:
-      - id: decision
+      # 2. Parse data
+      - name: Parse data
         run: |
-          TEMP=${{ needs.analyze.outputs.temp }}
+          TEMP=$(jq '.current_weather.temperature' weather.json)
+          WIND=$(jq '.current_weather.windspeed' weather.json)
 
-          if [ "$TEMP" -gt 35 ]; then
-            STATUS="DANGER"
-          elif [ "$TEMP" -gt 30 ]; then
-            STATUS="WARNING"
-          elif [ "$TEMP" -lt 5 ]; then
-            STATUS="CRITICAL"
+          echo "TEMP=$TEMP" >> $GITHUB_ENV
+          echo "WIND=$WIND" >> $GITHUB_ENV
+
+      # 3. Analyze
+      - name: Analyze
+        run: |
+          if (( $(echo "$TEMP > 30" | bc -l) )); then
+            STATUS="HOT"
+          elif (( $(echo "$TEMP < 10" | bc -l) )); then
+            STATUS="COLD"
           else
-            STATUS="HEALTHY"
+            STATUS="NORMAL"
           fi
 
-          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          echo "STATUS=$STATUS" >> $GITHUB_ENV
 
-  predict:
-    runs-on: ubuntu-latest
-    needs: analyze
-    outputs:
-      trend: ${{ steps.pred.outputs.trend }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - id: pred
+      # 4. Predict
+      - name: Predict
         run: |
-          TEMP=${{ needs.analyze.outputs.temp }}
-
-          if [ ! -f history.txt ]; then
-            echo "$TEMP" > history.txt
-            TREND="NEW"
+          if [ "$STATUS" = "HOT" ]; then
+            TREND="Cooling Soon"
+          elif [ "$STATUS" = "COLD" ]; then
+            TREND="Warming Soon"
           else
-            LAST=$(tail -n 1 history.txt)
-
-            if [ "$TEMP" -gt "$LAST" ]; then
-              TREND="UP"
-            elif [ "$TEMP" -lt "$LAST" ]; then
-              TREND="DOWN"
-            else
-              TREND="STABLE"
-            fi
-
-            echo "$TEMP" >> history.txt
+            TREND="Stable"
           fi
 
-          echo "trend=$TREND" >> $GITHUB_OUTPUT
+          echo "TREND=$TREND" >> $GITHUB_ENV
 
-  score:
-    runs-on: ubuntu-latest
-    needs: decide
-    outputs:
-      score: ${{ steps.calc.outputs.score }}
-
-    steps:
-      - id: calc
+      # 5. Score
+      - name: Score
         run: |
-          STATUS=${{ needs.decide.outputs.status }}
+          SCORE=$(( (TEMP * 2) + WIND ))
+          echo "SCORE=$SCORE" >> $GITHUB_ENV
 
-          SCORE=100
-          if [ "$STATUS" = "WARNING" ]; then SCORE=70; fi
-          if [ "$STATUS" = "CRITICAL" ]; then SCORE=40; fi
-          if [ "$STATUS" = "DANGER" ]; then SCORE=10; fi
+      # 6. Save history
+      - name: Save history
+        run: |
+          echo "$(date),$TEMP" >> temp.csv
 
-          echo "score=$SCORE" >> $GITHUB_OUTPUT
+      # 7. Generate graph
+      - name: Generate graph
+        run: |
+          echo "<svg width='300' height='100'>" > graph.svg
+          i=0
+          while IFS=, read -r time temp; do
+            x=$((i*10))
+            y=$((100 - temp))
+            echo "<circle cx='$x' cy='$y' r='2' fill='cyan' />" >> graph.svg
+            i=$((i+1))
+          done < temp.csv
+          echo "</svg>" >> graph.svg
 
-  update:
-    runs-on: ubuntu-latest
-    needs: [analyze, decide, predict, score]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Generate data.json
+      # 8. Build JSON
+      - name: Build JSON
         run: |
           echo "{
-            \"temp\": ${{ needs.analyze.outputs.temp }},
-            \"wind\": ${{ needs.analyze.outputs.wind }},
-            \"status\": \"${{ needs.decide.outputs.status }}\",
-            \"trend\": \"${{ needs.predict.outputs.trend }}\",
-            \"score\": ${{ needs.score.outputs.score }},
+            \"temp\": $TEMP,
+            \"wind\": $WIND,
+            \"status\": \"$STATUS\",
+            \"trend\": \"$TREND\",
+            \"score\": $SCORE,
             \"updated\": \"$(date)\"
           }" > data.json
 
-      - name: Commit
+      # 9. Commit changes
+      - name: Commit & push
         run: |
-          git config user.name "ai-bot"
-          git config user.email "bot@ai.com"
-
+          git config user.name "bot"
+          git config user.email "bot@users.noreply.github.com"
           git add .
-
-          git diff --cached --quiet || git commit -m "auto update"
-
+          git commit -m "auto update" || echo "no changes"
           git push
