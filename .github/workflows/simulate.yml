@@ -208,6 +208,37 @@ jobs:
           { echo "$HEAD"; echo "$TAIL"; } > history_new.txt
           mv history_new.txt history.txt
 
+      - name: Validate data
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+
+          with open("data.json") as f:
+              d = json.load(f)
+
+          errors = []
+          if not isinstance(d.get("temp"), (int, float)):
+              errors.append("temp missing or not a number")
+          if not isinstance(d.get("wind"), (int, float)):
+              errors.append("wind missing or not a number")
+          if d.get("status") not in ["OK", "WARM", "HOT", "COLD"]:
+              errors.append(f"invalid status: {d.get('status')}")
+          if not isinstance(d.get("score"), int):
+              errors.append("score missing or not an int")
+          if not d.get("updated"):
+              errors.append("updated timestamp missing")
+          if not d.get("sha256"):
+              errors.append("sha256 checksum missing")
+
+          if errors:
+              print("VALIDATION FAILED:")
+              for e in errors:
+                  print(f"  - {e}")
+              sys.exit(1)
+
+          print(f"Validation passed: temp={d['temp']} wind={d['wind']} status={d['status']} score={d['score']}")
+          EOF
+
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
