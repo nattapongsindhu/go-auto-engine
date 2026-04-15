@@ -17,7 +17,10 @@
       flex-direction: column;
       align-items: center;
       padding: 2rem 1rem;
+      transition: opacity 0.3s;
     }
+
+    body.loading { opacity: 0.6; }
 
     h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
     .subtitle { color: #7ab; font-size: 0.9rem; margin-bottom: 2rem; }
@@ -59,7 +62,25 @@
       border-radius: 10px;
       padding: 1rem;
       margin-bottom: 1.5rem;
+      position: relative;
     }
+
+    .chart-empty {
+      text-align: center;
+      color: #456;
+      padding: 2rem;
+      font-size: 0.85rem;
+      display: none;
+    }
+
+    .health {
+      font-size: 0.7rem;
+      color: #456;
+      margin-top: 0.25rem;
+    }
+
+    .health.ok   { color: #00cc88; }
+    .health.warn { color: #ffaa00; }
 
     .updated {
       font-size: 0.75rem;
@@ -72,12 +93,14 @@
       display: none;
       margin-top: 1rem;
       font-size: 0.85rem;
+      max-width: 500px;
+      text-align: center;
     }
   </style>
 </head>
 <body>
 
-<!-- v3 -->
+<!-- v4 -->
 <h1>🚀 LA Weather Automet</h1>
 <p class="subtitle">Fetch → Analyze → Score → Visualize</p>
 
@@ -106,39 +129,75 @@
 
 <div class="chart-wrap">
   <canvas id="chart"></canvas>
+  <div class="chart-empty" id="chart-empty">No data available</div>
 </div>
 
 <p class="updated" id="updated-at"></p>
-<p id="error-msg" style="display:none">⚠️ Failed to load data. Please try again later.</p>
+<p class="health" id="pipeline-health"></p>
+<p id="error-msg" style="display:none"></p>
 
 <script>
 let chartInstance = null;
+const ALLOWED_STATUS = ["OK", "WARM", "HOT", "COLD"];
+
+function setError(msg) {
+  const el = document.getElementById("error-msg");
+  el.textContent = "⚠️ " + msg;
+  el.style.display = "block";
+}
+
+function clearError() {
+  document.getElementById("error-msg").style.display = "none";
+}
 
 async function load() {
+  document.body.classList.add("loading");
+
   try {
-    const res = await fetch("./data.json?t=" + Date.now());
-    if (!res.ok) throw new Error("data.json fetch failed");
+    // --- data.json with cache bypass ---
+    const res = await fetch("./data.json", { cache: "no-store" });
+    if (!res.ok) throw new Error("data.json fetch failed: " + res.status);
     const d = await res.json();
 
-    document.getElementById("val-temp").textContent  = d.temp  ?? "—";
-    document.getElementById("val-wind").textContent  = d.wind  ?? "—";
+    // schema validation
+    if (typeof d.temp !== "number") throw new Error("Invalid data: temp missing");
+    if (typeof d.wind !== "number") throw new Error("Invalid data: wind missing");
+
+    document.getElementById("val-temp").textContent  = d.temp;
+    document.getElementById("val-wind").textContent  = d.wind;
     document.getElementById("val-trend").textContent = d.trend ?? "";
     document.getElementById("val-score").textContent = d.score ?? "—";
 
+    // safe status class
+    const status  = ALLOWED_STATUS.includes(d.status) ? d.status : "OK";
     const statusEl = document.getElementById("val-status");
     statusEl.textContent = d.status ?? "—";
-    statusEl.className = "value status-" + (d.status ?? "");
+    statusEl.className   = "value status-" + status;
 
+    // pipeline health check
     if (d.updated) {
-      document.getElementById("updated-at").textContent =
-        "Last updated: " + new Date(d.updated).toLocaleString();
+      const updated   = new Date(d.updated);
+      const ageHours  = (Date.now() - updated.getTime()) / 3600000;
+      const healthEl  = document.getElementById("pipeline-health");
+      const updatedEl = document.getElementById("updated-at");
+
+      updatedEl.textContent = "Last updated: " + updated.toLocaleString();
+
+      if (ageHours < 7) {
+        healthEl.textContent  = "● Pipeline healthy";
+        healthEl.className    = "health ok";
+      } else {
+        healthEl.textContent  = "⚠ Pipeline may be stale (" + Math.round(ageHours) + "h ago)";
+        healthEl.className    = "health warn";
+      }
     }
 
-    const csvRes = await fetch("./temp.csv?t=" + Date.now());
-    if (!csvRes.ok) throw new Error("temp.csv fetch failed");
+    // --- temp.csv with cache bypass ---
+    const csvRes = await fetch("./temp.csv", { cache: "no-store" });
+    if (!csvRes.ok) throw new Error("temp.csv fetch failed: " + csvRes.status);
     const text = await csvRes.text();
 
-    const rows   = text.trim().split("\n").slice(1);
+    const rows   = text.trim().split("\n").slice(1); // skip header
     const last20 = rows.slice(-20);
 
     const labels = last20.map(r => {
@@ -147,10 +206,23 @@ async function load() {
       catch { return ts; }
     });
 
+    // fix: filter nulls + validate parts
     const values = last20.map(r => {
-      const v = parseFloat(r.split(",")[1]);
+      const parts = r.split(",");
+      if (parts.length < 2) return null;
+      const v = parseFloat(parts[1]);
       return isNaN(v) ? null : v;
-    });
+    }).filter(v => v !== null);
+
+    // fix: guard against empty dataset
+    const emptyEl = document.getElementById("chart-empty");
+    if (!values.length) {
+      emptyEl.style.display = "block";
+      console.warn("No valid data for chart");
+      document.body.classList.remove("loading");
+      return;
+    }
+    emptyEl.style.display = "none";
 
     if (chartInstance) chartInstance.destroy();
 
@@ -165,7 +237,8 @@ async function load() {
           backgroundColor: "rgba(0,255,204,0.1)",
           tension: 0.4,
           pointRadius: 3,
-          fill: true
+          fill: true,
+          spanGaps: true
         }]
       },
       options: {
@@ -178,11 +251,13 @@ async function load() {
       }
     });
 
-    document.getElementById("error-msg").style.display = "none";
+    clearError();
 
   } catch (err) {
     console.error(err);
-    document.getElementById("error-msg").style.display = "block";
+    setError(err.message);
+  } finally {
+    document.body.classList.remove("loading");
   }
 }
 
