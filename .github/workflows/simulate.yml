@@ -1,4 +1,4 @@
-name: ai-engine-safe-level6
+name: ai-engine-balanced
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ai-safe-engine
+  group: ai-engine
   cancel-in-progress: true
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
       - name: Install jq
         run: sudo apt-get install -y jq
 
-      - name: Fetch weather data
+      - name: Fetch weather
         id: data
         run: |
           curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
@@ -42,30 +42,24 @@ jobs:
     needs: analyze
     outputs:
       status: ${{ steps.decision.outputs.status }}
-      reason: ${{ steps.decision.outputs.reason }}
 
     steps:
-      - name: Decision logic
+      - name: Decision
         id: decision
         run: |
           TEMP=${{ needs.analyze.outputs.temp }}
 
           if [ "$TEMP" -gt 35 ]; then
             STATUS="DANGER"
-            REASON="Extreme heat detected"
           elif [ "$TEMP" -gt 30 ]; then
             STATUS="WARNING"
-            REASON="High temperature"
           elif [ "$TEMP" -lt 5 ]; then
             STATUS="CRITICAL"
-            REASON="Low temperature"
           else
             STATUS="HEALTHY"
-            REASON="Normal condition"
           fi
 
           echo "status=$STATUS" >> $GITHUB_OUTPUT
-          echo "reason=$REASON" >> $GITHUB_OUTPUT
 
   predict:
     runs-on: ubuntu-latest
@@ -76,7 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Predict trend
+      - name: Predict
         id: pred
         run: |
           TEMP=${{ needs.analyze.outputs.temp }}
@@ -100,124 +94,57 @@ jobs:
 
           echo "trend=$TREND" >> $GITHUB_OUTPUT
 
-  anomaly:
-    runs-on: ubuntu-latest
-    needs: analyze
-    outputs:
-      anomaly: ${{ steps.check.outputs.anomaly }}
-
-    steps:
-      - name: Detect anomaly
-        id: check
-        run: |
-          TEMP=${{ needs.analyze.outputs.temp }}
-
-          if [ "$TEMP" -gt 45 ] || [ "$TEMP" -lt -5 ]; then
-            ANOMALY="YES"
-          else
-            ANOMALY="NO"
-          fi
-
-          echo "anomaly=$ANOMALY" >> $GITHUB_OUTPUT
-
   score:
     runs-on: ubuntu-latest
-    needs: [decide, anomaly]
+    needs: decide
     outputs:
       score: ${{ steps.calc.outputs.score }}
 
     steps:
-      - name: Calculate score
-        id: calc
+      - id: calc
         run: |
           STATUS=${{ needs.decide.outputs.status }}
-          ANOMALY=${{ needs.anomaly.outputs.anomaly }}
 
           SCORE=100
-
           if [ "$STATUS" = "WARNING" ]; then SCORE=70; fi
           if [ "$STATUS" = "CRITICAL" ]; then SCORE=40; fi
           if [ "$STATUS" = "DANGER" ]; then SCORE=10; fi
-          if [ "$ANOMALY" = "YES" ]; then SCORE=0; fi
 
           echo "score=$SCORE" >> $GITHUB_OUTPUT
 
   update:
     runs-on: ubuntu-latest
-    needs: [analyze, decide, predict, anomaly, score]
+    needs: [analyze, decide, predict, score]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate graph
-        run: |
-          GRAPH=""
-          if [ -f history.txt ]; then
-            for T in $(tail -n 10 history.txt); do
-              BAR=$(printf "%0.s#" $(seq 1 $T))
-              GRAPH="$GRAPH\n$BAR"
-            done
-          fi
-
-          echo "GRAPH<<EOF" >> $GITHUB_ENV
-          echo -e "$GRAPH" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-      - name: Generate README
+      # 🔥 Generate API file (สำคัญ)
+      - name: Generate API
         run: |
           TEMP=${{ needs.analyze.outputs.temp }}
           WIND=${{ needs.analyze.outputs.wind }}
           STATUS=${{ needs.decide.outputs.status }}
-          REASON=${{ needs.decide.outputs.reason }}
           TREND=${{ needs.predict.outputs.trend }}
-          ANOMALY=${{ needs.anomaly.outputs.anomaly }}
           SCORE=${{ needs.score.outputs.score }}
 
-          echo "# 🚀 AI Monitoring System (Safe Mode)" > README.md
-          echo "" >> README.md
+          echo "{
+            \"temp\": $TEMP,
+            \"wind\": $WIND,
+            \"status\": \"$STATUS\",
+            \"trend\": \"$TREND\",
+            \"score\": $SCORE,
+            \"updated\": \"$(date)\"
+          }" > data.json
 
-          echo "## 🌡 Data" >> README.md
-          echo "- Temperature: $TEMP °C" >> README.md
-          echo "- Wind Speed: $WIND km/h" >> README.md
-          echo "" >> README.md
-
-          echo "## 🤖 System Status" >> README.md
-          echo "- Status: $STATUS" >> README.md
-          echo "- Reason: $REASON" >> README.md
-          echo "" >> README.md
-
-          echo "## 📈 Prediction" >> README.md
-          echo "- Trend: $TREND" >> README.md
-          echo "" >> README.md
-
-          echo "## ⚠️ Anomaly Detection" >> README.md
-          echo "- Anomaly: $ANOMALY" >> README.md
-          echo "" >> README.md
-
-          echo "## 🧮 Score" >> README.md
-          echo "- System Score: $SCORE / 100" >> README.md
-          echo "" >> README.md
-
-          echo "## 📊 Graph" >> README.md
-          echo '```' >> README.md
-          echo -e "$GRAPH" >> README.md
-          echo '```' >> README.md
-          echo "" >> README.md
-
-          echo "## 🔄 Flow" >> README.md
-          echo "Analyze → Decide → Predict → Detect → Score → Update" >> README.md
-          echo "" >> README.md
-
-          echo "## 📜 History" >> README.md
-          tail -n 5 history.txt >> README.md || echo "No history yet" >> README.md
-
-      - name: Commit changes (safe)
+      # 🔥 Commit safe
+      - name: Commit
         run: |
-          git config user.name "safe-ai-bot"
-          git config user.email "bot@safe.ai"
+          git config user.name "ai-bot"
+          git config user.email "bot@ai.com"
 
           git add .
 
-          git diff --cached --quiet || git commit -m "safe AI update"
+          git diff --cached --quiet || git commit -m "balanced update"
 
           git push
