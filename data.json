@@ -1,7 +1,10 @@
 {
   "temp": 13.4,
   "wind": 5.4,
+  "direction": 127,
+  "is_day": false,
   "status": "OK",
   "trend": "Stable",
-  "score": 27
+  "score": 30,
+  "updated": "2026-04-15T07:25:00Z"
 }
