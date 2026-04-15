@@ -37,7 +37,7 @@
 ---
 
 ## ⚙️ System Pipeline
-Fetch → Analyze → Predict → Score → Update
+- Fetch → Analyze → Predict → Score → Update
 ---
 
 ## 🤖 Automation
