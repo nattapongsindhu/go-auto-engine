@@ -1,54 +1,61 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>go-auto-engine</title>
+  <title>Go Auto Engine</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      background: #0b1a2a;
+      color: white;
+      font-family: Arial;
+      text-align: center;
+    }
+  </style>
 </head>
 
-<body style="background:#0f172a;color:white;text-align:center;padding:40px">
+<body>
 
-<h1>🚀 go-auto-engine</h1>
+<h1>🚀 Go Auto Engine</h1>
 <p>Analyze → Predict → Score → Decide</p>
+
 <div id="data">Loading...</div>
 
-<canvas id="chart" width="400" height="200"></canvas>
+<canvas id="chart" width="800" height="300"></canvas>
 
 <script>
-let chart;
-
-async function loadData() {
-  const res = await fetch('./data.json');
+async function load() {
+  const res = await fetch("./data.json");
   const d = await res.json();
 
   document.getElementById("data").innerHTML = `
     🌡 Temp: ${d.temp}°C <br>
     💨 Wind: ${d.wind} km/h <br>
-    🤖 Status: ${d.status} <br>
+    🧠 Status: ${d.status} <br>
     📈 Trend: ${d.trend} <br>
     🎯 Score: ${d.score}
   `;
-}
 
-async function loadChart() {
-  const res = await fetch('./temp.csv');
-  const text = await res.text();
+  const csv = await fetch("./temp.csv");
+  const text = await csv.text();
 
-  const temps = text.trim().split("\n").map(x => parseInt(x.split(",")[1]));
+  const rows = text.trim().split("\n").slice(-10);
+
+  const labels = rows.map(r => r.split(",")[0]);
+  const values = rows.map(r => r.split(",")[1]);
 
   new Chart(document.getElementById("chart"), {
-    type: 'line',
+    type: "line",
     data: {
-      labels: temps.map((_,i)=>i),
+      labels: labels,
       datasets: [{
-        label: 'Temperature',
-        data: temps
+        label: "Temperature",
+        data: values
       }]
     }
   });
 }
 
-loadData();
-loadChart();
+load();
 </script>
 
 </body>
