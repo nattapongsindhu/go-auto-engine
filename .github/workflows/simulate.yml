@@ -2,7 +2,7 @@ name: ai-engine-balanced
 
 on:
   schedule:
-    - cron: "0 */6 * * *"   # every 6 hours (safe)
+    - cron: "0 */6 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -44,8 +44,7 @@ jobs:
       status: ${{ steps.decision.outputs.status }}
 
     steps:
-      - name: Decision
-        id: decision
+      - id: decision
         run: |
           TEMP=${{ needs.analyze.outputs.temp }}
 
@@ -70,8 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Predict
-        id: pred
+      - id: pred
         run: |
           TEMP=${{ needs.analyze.outputs.temp }}
 
@@ -119,25 +117,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 🔥 Generate API file (สำคัญ)
-      - name: Generate API
+      - name: Generate data.json
         run: |
-          TEMP=${{ needs.analyze.outputs.temp }}
-          WIND=${{ needs.analyze.outputs.wind }}
-          STATUS=${{ needs.decide.outputs.status }}
-          TREND=${{ needs.predict.outputs.trend }}
-          SCORE=${{ needs.score.outputs.score }}
-
           echo "{
-            \"temp\": $TEMP,
-            \"wind\": $WIND,
-            \"status\": \"$STATUS\",
-            \"trend\": \"$TREND\",
-            \"score\": $SCORE,
+            \"temp\": ${{ needs.analyze.outputs.temp }},
+            \"wind\": ${{ needs.analyze.outputs.wind }},
+            \"status\": \"${{ needs.decide.outputs.status }}\",
+            \"trend\": \"${{ needs.predict.outputs.trend }}\",
+            \"score\": ${{ needs.score.outputs.score }},
             \"updated\": \"$(date)\"
           }" > data.json
 
-      # 🔥 Commit safe
       - name: Commit
         run: |
           git config user.name "ai-bot"
@@ -145,6 +135,6 @@ jobs:
 
           git add .
 
-          git diff --cached --quiet || git commit -m "balanced update"
+          git diff --cached --quiet || git commit -m "auto update"
 
           git push
