@@ -1,4 +1,4 @@
-name: AI Engine Balanced
+name: go-auto-engine
 
 on:
   workflow_dispatch:
