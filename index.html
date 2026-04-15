@@ -1,51 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Go Auto Engine</title>
-
+  <title>go-auto-engine</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-  <style>
-    body {
-      font-family: Arial;
-      background: #0f172a;
-      color: white;
-      text-align: center;
-      padding: 40px;
-    }
-
-    .card {
-      background: #1e293b;
-      padding: 20px;
-      margin: 10px;
-      border-radius: 12px;
-
-      /* glow */
-      box-shadow: 0 0 10px rgba(56,189,248,0.3);
-
-      animation: fadeIn 1s ease-in-out;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(20px);}
-      to { opacity: 1; transform: translateY(0);}
-    }
-
-    canvas {
-      margin-top: 20px;
-    }
-  </style>
 </head>
 
-<body>
+<body style="background:#0f172a;color:white;text-align:center;padding:40px">
 
-<h1>🚀 Go Auto Engine</h1>
+<h1>🚀 go-auto-engine</h1>
 <p>Analyze → Predict → Score → Decide</p>
-<div class="card" id="data">Loading...</div>
+<div id="data">Loading...</div>
 
-<canvas id="chart" width="300" height="150"></canvas>
+<canvas id="chart" width="400" height="200"></canvas>
 
 <script>
+let chart;
+
 async function loadData() {
   const res = await fetch('./data.json');
   const d = await res.json();
@@ -53,10 +23,9 @@ async function loadData() {
   document.getElementById("data").innerHTML = `
     🌡 Temp: ${d.temp}°C <br>
     💨 Wind: ${d.wind} km/h <br>
-    🧠 Status: ${d.status} <br>
+    🤖 Status: ${d.status} <br>
     📈 Trend: ${d.trend} <br>
-    🎯 Score: ${d.score} <br>
-    ⏱ Updated: ${d.updated}
+    🎯 Score: ${d.score}
   `;
 }
 
@@ -64,8 +33,7 @@ async function loadChart() {
   const res = await fetch('./temp.csv');
   const text = await res.text();
 
-  const lines = text.trim().split("\n");
-  const temps = lines.map(l => parseFloat(l.split(",")[1]));
+  const temps = text.trim().split("\n").map(x => parseInt(x.split(",")[1]));
 
   new Chart(document.getElementById("chart"), {
     type: 'line',
@@ -73,9 +41,7 @@ async function loadChart() {
       labels: temps.map((_,i)=>i),
       datasets: [{
         label: 'Temperature',
-        data: temps,
-        borderWidth: 2,
-        tension: 0.3
+        data: temps
       }]
     }
   });
@@ -83,8 +49,6 @@ async function loadChart() {
 
 loadData();
 loadChart();
-
-setInterval(loadData, 60000);
 </script>
 
 </body>
