@@ -37,3 +37,28 @@
 ---
 
 ## ⚙️ System Pipeline
+
+---
+
+## 🤖 Automation
+
+- ⏱ Auto update via GitHub Actions
+- 🔄 Continuous commit pipeline
+- 📊 Data-driven visualization
+
+---
+
+## 📌 About
+
+This project demonstrates:
+
+- CI/CD automation (GitHub Actions)
+- Data pipeline simulation
+- Real-time dashboard rendering
+- Zero-cost infrastructure
+
+---
+
+<p align="center">
+  ⚡ Built for Portfolio + Automation Engineering
+</p>
