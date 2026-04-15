@@ -1,14 +1,39 @@
-name: auto-engine-alive
+name: go-auto-engine
 
 on:
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  test:
+  auto-engine:
     runs-on: ubuntu-latest
 
     steps:
-      - name: System Check
-        run: echo "⚙️ go-auto-engine is running"
+      # 1. โหลด repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. สร้าง README
+      - name: Generate README
+        run: |
+          echo "# 🚀 Go Auto Engine" > README.md
+          echo "" >> README.md
+          echo "## 🧠 System Status" >> README.md
+          echo "- Status: Running ⚙️" >> README.md
+          echo "- Time: $(date)" >> README.md
+          echo "" >> README.md
+          echo "## 🔄 Auto Update" >> README.md
+          echo "This file is updated automatically by GitHub Actions." >> README.md
+
+      # 3. commit + push
+      - name: Commit and push
+        run: |
+          git config user.name "auto-engine-bot"
+          git config user.email "bot@auto-engine.com"
+          git add README.md
+          git commit -m "🤖 auto update README" || echo "no changes"
+          git push
