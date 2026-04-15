@@ -1,8 +1,5 @@
 {
-  "temp": 13,
-  "wind": 5,
-  "status": "HEALTHY",
-  "trend": "Stable",
-  "score": 31,
-  "updated": "Wed Apr 15 06:44:47 UTC 2026"
+  "temp": 13.4,
+  "wind": 6.8,
+  "status": "OK"
 }
