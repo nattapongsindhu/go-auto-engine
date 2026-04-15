@@ -1,9 +1,14 @@
-name: go-auto-engine-ai-system
+name: go-auto-engine-level6
 
 on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
+
+# 🔥 กัน workflow ซ้อนกัน
+concurrency:
+  group: ai-engine
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -19,11 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install tools
-        run: sudo apt-get install -y jq
+      - run: sudo apt-get install -y jq
 
-      - name: Fetch & analyze data
-        id: data
+      - id: data
         run: |
           curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
 
@@ -41,15 +44,19 @@ jobs:
       reason: ${{ steps.decision.outputs.reason }}
 
     steps:
-      - name: AI decision
-        id: decision
+      - run: sudo apt-get install -y bc
+
+      - id: decision
         run: |
           TEMP=${{ needs.analyze.outputs.temp }}
 
-          if (( $(echo "$TEMP > 30" | bc -l) )); then
+          if (( $(echo "$TEMP > 35" | bc -l) )); then
+            STATE="DANGER"
+            REASON="Extreme heat"
+          elif (( $(echo "$TEMP > 30" | bc -l) )); then
             STATE="WARNING"
-            REASON="Too hot"
-          elif (( $(echo "$TEMP < 10" | bc -l) )); then
+            REASON="Hot"
+          elif (( $(echo "$TEMP < 5" | bc -l) )); then
             STATE="CRITICAL"
             REASON="Too cold"
           else
@@ -68,12 +75,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - run: sudo apt-get install -y bc
 
-      - name: Install bc
-        run: sudo apt-get install -y bc
-
-      - name: Predict trend
-        id: pred
+      - id: pred
         run: |
           TEMP=${{ needs.analyze.outputs.temp }}
 
@@ -96,9 +100,51 @@ jobs:
 
           echo "trend=$TREND" >> $GITHUB_OUTPUT
 
+  anomaly:
+    runs-on: ubuntu-latest
+    needs: analyze
+    outputs:
+      anomaly: ${{ steps.check.outputs.anomaly }}
+
+    steps:
+      - run: sudo apt-get install -y bc
+
+      - id: check
+        run: |
+          TEMP=${{ needs.analyze.outputs.temp }}
+
+          if (( $(echo "$TEMP > 45" | bc -l) )) || (( $(echo "$TEMP < -5" | bc -l) )); then
+            ANOMALY="YES"
+          else
+            ANOMALY="NO"
+          fi
+
+          echo "anomaly=$ANOMALY" >> $GITHUB_OUTPUT
+
+  score:
+    runs-on: ubuntu-latest
+    needs: [decide, anomaly]
+    outputs:
+      score: ${{ steps.calc.outputs.score }}
+
+    steps:
+      - id: calc
+        run: |
+          STATE=${{ needs.decide.outputs.state }}
+          ANOMALY=${{ needs.anomaly.outputs.anomaly }}
+
+          SCORE=100
+
+          if [ "$STATE" = "WARNING" ]; then SCORE=70; fi
+          if [ "$STATE" = "CRITICAL" ]; then SCORE=40; fi
+          if [ "$STATE" = "DANGER" ]; then SCORE=10; fi
+          if [ "$ANOMALY" = "YES" ]; then SCORE=0; fi
+
+          echo "score=$SCORE" >> $GITHUB_OUTPUT
+
   update:
     runs-on: ubuntu-latest
-    needs: [analyze, decide, predict]
+    needs: [analyze, decide, predict, anomaly, score]
 
     steps:
       - uses: actions/checkout@v4
@@ -122,44 +168,43 @@ jobs:
           STATE=${{ needs.decide.outputs.state }}
           REASON=${{ needs.decide.outputs.reason }}
           TREND=${{ needs.predict.outputs.trend }}
+          ANOMALY=${{ needs.anomaly.outputs.anomaly }}
+          SCORE=${{ needs.score.outputs.score }}
 
-          echo "# 🚀 Go Auto Engine AI System" > README.md
-          echo "" >> README.md
+          echo "# 🚀 AI Engine Level 6" > README.md
 
-          echo "## 🌡️ Live Data" >> README.md
+          echo "## 🌡️ Data" >> README.md
           echo "- Temp: $TEMP °C" >> README.md
           echo "- Wind: $WIND km/h" >> README.md
-          echo "" >> README.md
 
-          echo "## 🤖 AI Decision" >> README.md
+          echo "## 🤖 Decision" >> README.md
           echo "- State: $STATE" >> README.md
           echo "- Reason: $REASON" >> README.md
-          echo "" >> README.md
 
           echo "## 📈 Prediction" >> README.md
           echo "- Trend: $TREND" >> README.md
-          echo "" >> README.md
+
+          echo "## ⚠️ Anomaly" >> README.md
+          echo "- Anomaly: $ANOMALY" >> README.md
+
+          echo "## 🧮 Score" >> README.md
+          echo "- System Score: $SCORE / 100" >> README.md
 
           echo "## 📊 Graph" >> README.md
           echo '```' >> README.md
           echo -e "$GRAPH" >> README.md
           echo '```' >> README.md
-          echo "" >> README.md
 
-          echo "## 🧠 System Architecture" >> README.md
-          echo "Analyze → Decide → Predict → Update" >> README.md
-          echo "" >> README.md
+          echo "## 🧠 Flow" >> README.md
+          echo "Analyze → Decide → Predict → Detect → Score → Update" >> README.md
 
           echo "## 📜 History" >> README.md
           tail -n 5 history.txt >> README.md
-
-          echo "" >> README.md
-          echo "_Auto updated by AI agents_" >> README.md
 
       - name: Commit
         run: |
           git config user.name "ai-engine"
           git config user.email "ai@engine.com"
           git add .
-          git commit -m "AI multi-agent update" || echo "no changes"
+          git commit -m "Level 6 AI update" || echo "no changes"
           git push
