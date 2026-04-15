@@ -1,61 +1,195 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Go Auto Engine</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
       background: #0b1a2a;
-      color: white;
-      font-family: Arial;
+      color: #e0f0ff;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #7ab; font-size: 0.9rem; margin-bottom: 2rem; }
+
+    .cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+      margin-bottom: 2rem;
+      width: 100%;
+      max-width: 700px;
+    }
+
+    .card {
+      background: #0f2840;
+      border: 1px solid #1e3a5f;
+      border-radius: 10px;
+      padding: 1rem 1.5rem;
+      min-width: 130px;
+      flex: 1;
       text-align: center;
+    }
+
+    .card .label { font-size: 0.75rem; color: #7ab; text-transform: uppercase; letter-spacing: 1px; }
+    .card .value { font-size: 1.6rem; font-weight: bold; margin-top: 0.25rem; color: #00ffcc; }
+    .card .unit  { font-size: 0.75rem; color: #7ab; }
+
+    .status-OK   { color: #00ffcc; }
+    .status-WARM { color: #ffcc00; }
+    .status-HOT  { color: #ff4444; }
+    .status-COLD { color: #44aaff; }
+
+    .chart-wrap {
+      width: 100%;
+      max-width: 700px;
+      background: #0f2840;
+      border: 1px solid #1e3a5f;
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .updated {
+      font-size: 0.75rem;
+      color: #456;
+      margin-top: 1rem;
+    }
+
+    #error-msg {
+      color: #f66;
+      display: none;
+      margin-top: 1rem;
     }
   </style>
 </head>
-
 <body>
 
 <h1>🚀 Go Auto Engine</h1>
-<p>Analyze → Predict → Score → Decide</p>
+<p class="subtitle">Fetch → Analyze → Score → Visualize</p>
 
-<div id="data">Loading...</div>
+<div class="cards">
+  <div class="card">
+    <div class="label">🌡 Temperature</div>
+    <div class="value" id="val-temp">—</div>
+    <div class="unit">°C</div>
+  </div>
+  <div class="card">
+    <div class="label">💨 Wind</div>
+    <div class="value" id="val-wind">—</div>
+    <div class="unit">km/h</div>
+  </div>
+  <div class="card">
+    <div class="label">🧠 Status</div>
+    <div class="value" id="val-status">—</div>
+    <div class="unit" id="val-trend">—</div>
+  </div>
+  <div class="card">
+    <div class="label">🎯 Score</div>
+    <div class="value" id="val-score">—</div>
+    <div class="unit">/ 100</div>
+  </div>
+</div>
 
-<canvas id="chart" width="800" height="300"></canvas>
+<div class="chart-wrap">
+  <canvas id="chart"></canvas>
+</div>
+
+<p class="updated" id="updated-at"></p>
+<p id="error-msg">⚠️ Failed to load data. Please try again later.</p>
 
 <script>
+let chartInstance = null;
+
 async function load() {
-  const res = await fetch("./data.json");
-  const d = await res.json();
+  try {
+    // --- data.json ---
+    const res = await fetch("./data.json?t=" + Date.now());
+    if (!res.ok) throw new Error("data.json fetch failed");
+    const d = await res.json();
 
-  document.getElementById("data").innerHTML = `
-    🌡 Temp: ${d.temp}°C <br>
-    💨 Wind: ${d.wind} km/h <br>
-    🧠 Status: ${d.status} <br>
-    📈 Trend: ${d.trend} <br>
-    🎯 Score: ${d.score}
-  `;
+    document.getElementById("val-temp").textContent   = d.temp ?? "—";
+    document.getElementById("val-wind").textContent   = d.wind ?? "—";
+    document.getElementById("val-trend").textContent  = d.trend ?? "";
 
-  const csv = await fetch("./temp.csv");
-  const text = await csv.text();
+    const statusEl = document.getElementById("val-status");
+    statusEl.textContent = d.status ?? "—";
+    statusEl.className = "value status-" + (d.status ?? "");
 
-  const rows = text.trim().split("\n").slice(-10);
+    document.getElementById("val-score").textContent  = d.score ?? "—";
 
-  const labels = rows.map(r => r.split(",")[0]);
-  const values = rows.map(r => r.split(",")[1]);
-
-  new Chart(document.getElementById("chart"), {
-    type: "line",
-    data: {
-      labels: labels,
-      datasets: [{
-        label: "Temperature",
-        data: values
-      }]
+    if (d.updated) {
+      document.getElementById("updated-at").textContent =
+        "Last updated: " + new Date(d.updated).toLocaleString();
     }
-  });
+
+    // --- temp.csv ---
+    const csvRes = await fetch("./temp.csv?t=" + Date.now());
+    if (!csvRes.ok) throw new Error("temp.csv fetch failed");
+    const text = await csvRes.text();
+
+    const rows = text.trim().split("\n").slice(1); // skip header
+    const last20 = rows.slice(-20);
+
+    const labels = last20.map(r => {
+      const ts = r.split(",")[0];
+      try { return new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+      catch { return ts; }
+    });
+
+    const values = last20.map(r => {
+      const v = parseFloat(r.split(",")[1]);
+      return isNaN(v) ? null : v;
+    });
+
+    if (chartInstance) chartInstance.destroy();
+
+    chartInstance = new Chart(document.getElementById("chart"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          label: "Temperature (°C)",
+          data: values,
+          borderColor: "#00ffcc",
+          backgroundColor: "rgba(0,255,204,0.1)",
+          tension: 0.4,
+          pointRadius: 3,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: "#aac" } }
+        },
+        scales: {
+          x: { ticks: { color: "#7ab", maxRotation: 45 }, grid: { color: "#1e3a5f" } },
+          y: { ticks: { color: "#7ab" }, grid: { color: "#1e3a5f" } }
+        }
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById("error-msg").style.display = "block";
+  }
 }
 
 load();
+// Auto-refresh every 10 minutes
+setInterval(load, 10 * 60 * 1000);
 </script>
 
 </body>

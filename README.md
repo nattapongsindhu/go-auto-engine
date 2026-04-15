@@ -4,60 +4,84 @@
   <img src="https://img.shields.io/badge/Status-Running-green"/>
   <img src="https://img.shields.io/badge/Automation-GitHub_Actions-blue"/>
   <img src="https://img.shields.io/badge/Cost-100%25_Free-orange"/>
+  <img src="https://img.shields.io/github/last-commit/nattapongsindhu/go-auto-engine"/>
 </p>
 
----
-
-## 📊 Live Data
-
-- 🌡 Temperature: dynamic  
-- 💨 Wind: dynamic  
+A zero-cost CI/CD automation pipeline that fetches real weather data for Los Angeles every 6 hours, runs analysis logic, generates a live SVG chart, and publishes results to a GitHub Pages dashboard — fully automated with no servers, no secrets, and no spend.
 
 ---
 
-## 🧠 AI Analysis
+## 🌐 Live Dashboard
 
-- Status: dynamic  
-- Trend: dynamic  
-- Score: dynamic  
+👉 **[nattapongsindhu.github.io/go-auto-engine](https://nattapongsindhu.github.io/go-auto-engine/)**
 
 ---
 
-## 📈 Graph
+## 📊 Latest Reading
 
 <img src="./graph.svg" width="500"/>
 
 ---
 
-## 🌐 Dashboard
+## ⚙️ How It Works
 
-👉 https://nattapongsindhu.github.io/go-auto-engine/
+```
+GitHub Actions (cron: every 6h)
+  └── Fetch → Open-Meteo API (LA weather, no key required)
+  └── Analyze → Python: status classification + trend detection
+  └── Score → Heat index formula (0–100)
+  └── Update → temp.csv, data.json, graph.svg, history.txt
+  └── Commit → auto-push to main → GitHub Pages redeploys
+```
 
----
-
-## ⚙️ Pipeline
-- Fetch → Analyze → Predict → Score → Update
----
-
-## 🤖 Automation
-
-- ⏱ Auto update via GitHub Actions
-- 🔄 Continuous commit pipeline
-- 📊 Data-driven visualization
+**Stack:** Bash · Python 3 · jq · Chart.js · GitHub Actions · GitHub Pages
 
 ---
 
-## 📌 About
+## 📁 File Structure
 
-This project demonstrates:
-
-- CI/CD automation (GitHub Actions)
-- Data pipeline simulation
-- Real-time dashboard rendering
-- Zero-cost infrastructure
+| File | Purpose |
+|------|---------|
+| `.github/workflows/simulate.yml` | Main automation pipeline |
+| `data.json` | Latest sensor snapshot |
+| `temp.csv` | Historical temperature log |
+| `graph.svg` | Auto-generated SVG chart |
+| `index.html` | Live dashboard (Chart.js) |
+| `history.txt` | Status history (emoji heatmap) |
+| `weather.json` | Raw API response |
 
 ---
 
-<p align="center">
-  ⚡ Built for Portfolio + Automation Engineering
-</p>
+## 🧠 Analysis Logic
+
+| Condition | Status | Score |
+|-----------|--------|-------|
+| temp > 30°C | 🔴 HOT | high |
+| temp > 20°C | 🟡 WARM | medium |
+| temp < 5°C | 🔵 COLD | low |
+| otherwise | 🟢 OK | normal |
+
+Trend is calculated by comparing current temp against the previous reading (±1.5°C threshold).
+
+---
+
+## 🔒 Security
+
+- No API keys or secrets required
+- Uses [Open-Meteo](https://open-meteo.com/) — free, open, no auth
+- Workflow only writes to its own repo
+- All data committed in plain text (auditable)
+
+---
+
+## 💡 Why This Exists
+
+Built as a portfolio project demonstrating:
+- GitHub Actions scheduling and CI/CD principles
+- Data pipeline design (fetch → transform → store → visualize)
+- Zero-infrastructure automation
+- Python scripting inside shell workflows
+
+---
+
+<p align="center">⚡ Built for Portfolio + Automation Engineering</p>
