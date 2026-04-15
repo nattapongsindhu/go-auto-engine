@@ -1,4 +1,4 @@
-name: go-auto-engine
+name: go-auto-engine-ai
 
 on:
   schedule:
@@ -13,114 +13,123 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    # 1. Checkout repo
-    - name: Checkout repo
-      uses: actions/checkout@v4
+      # 2. Fix jq (สำคัญมาก)
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install jq -y
 
-    # 2. Fetch weather (ฟรี)
-    - name: Fetch weather
-      run: |
-        curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
+      # 3. Fetch weather
+      - name: Fetch weather
+        run: |
+          curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
 
-    # 3. Parse JSON
-    - name: Parse weather
-      run: |
-        TEMP=$(jq '.current_weather.temperature | floor' weather.json)
-        WIND=$(jq '.current_weather.windspeed | floor' weather.json)
+      # 4. Parse data
+      - name: Parse weather
+        run: |
+          TEMP=$(jq '.current_weather.temperature' weather.json)
+          WIND=$(jq '.current_weather.windspeed' weather.json)
 
-        echo "TEMP=$TEMP" >> $GITHUB_ENV
-        echo "WIND=$WIND" >> $GITHUB_ENV
+          echo "TEMP=$TEMP" >> $GITHUB_ENV
+          echo "WIND=$WIND" >> $GITHUB_ENV
 
-    # 4. AI Decision (ไม่มี bc แล้ว)
-    - name: AI Decision
-      run: |
-        if [ "$TEMP" -gt 30 ]; then
-          STATUS="WARNING"
-          STATE="🟡"
-          COLOR="yellow"
-          REASON="High temperature may reduce performance"
-        elif [ "$TEMP" -lt 10 ]; then
-          STATUS="CRITICAL"
-          STATE="🔴"
-          COLOR="red"
-          REASON="Low temperature may affect stability"
-        else
-          STATUS="HEALTHY"
-          STATE="🟢"
-          COLOR="brightgreen"
-          REASON="System operating normally"
-        fi
-
-        echo "STATUS=$STATUS" >> $GITHUB_ENV
-        echo "STATE=$STATE" >> $GITHUB_ENV
-        echo "COLOR=$COLOR" >> $GITHUB_ENV
-        echo "REASON=$REASON" >> $GITHUB_ENV
-
-    # 5. Save temperature history
-    - name: Save history
-      run: |
-        if [ -f temp.csv ]; then
+      # 5. Save history
+      - name: Save history
+        run: |
           echo "$TEMP" >> temp.csv
-        else
-          echo "$TEMP" > temp.csv
-        fi
+          tail -n 20 temp.csv > temp.tmp && mv temp.tmp temp.csv
 
-        # keep last 20 points
-        tail -n 20 temp.csv > temp_trim.csv
-        mv temp_trim.csv temp.csv
+      # 6. Trend analysis
+      - name: Trend analysis
+        run: |
+          COUNT=$(wc -l < temp.csv)
 
-    # 6. Generate REAL graph (no bc, smooth line)
-    - name: Generate graph
-      run: |
-        echo "<svg width='500' height='200' xmlns='http://www.w3.org/2000/svg'>" > graph.svg
+          if [ "$COUNT" -ge 5 ]; then
+            AVG=$(tail -n 5 temp.csv | awk '{sum+=$1} END {print sum/NR}')
+          else
+            AVG=$TEMP
+          fi
 
-        X=20
-        POINTS=""
+          echo "AVG=$AVG" >> $GITHUB_ENV
 
-        while read VALUE; do
-          Y=$((200 - VALUE * 3))
-          POINTS="$POINTS $X,$Y"
-          X=$((X+20))
-        done < temp.csv
+      # 7. AI Prediction
+      - name: AI Prediction
+        run: |
+          if (( $(echo "$TEMP > $AVG" | bc -l) )); then
+            TREND="📈 Rising"
+            PREDICT="🔥 Temperature increasing"
+          elif (( $(echo "$TEMP < $AVG" | bc -l) )); then
+            TREND="📉 Falling"
+            PREDICT="❄️ Cooling down"
+          else
+            TREND="➖ Stable"
+            PREDICT="😐 No major change"
+          fi
 
-        echo "<polyline points='$POINTS' fill='none' stroke='blue' stroke-width='2'/>" >> graph.svg
+          echo "TREND=$TREND" >> $GITHUB_ENV
+          echo "PREDICT=$PREDICT" >> $GITHUB_ENV
 
-        echo "</svg>" >> graph.svg
+      # 8. System decision
+      - name: Decision
+        run: |
+          if (( $(echo "$TEMP > 30" | bc -l) )); then
+            STATUS="⚠️ WARNING"
+            INSIGHT="Too hot"
+          elif (( $(echo "$TEMP < 10" | bc -l) )); then
+            STATUS="🔴 CRITICAL"
+            INSIGHT="Too cold"
+          else
+            STATUS="🟢 HEALTHY"
+            INSIGHT="Normal"
+          fi
 
-    # 7. Generate README Dashboard
-    - name: Generate README
-      run: |
-        echo "# 🚀 Go Auto Engine Dashboard" > README.md
-        echo "" >> README.md
+          echo "STATUS=$STATUS" >> $GITHUB_ENV
+          echo "INSIGHT=$INSIGHT" >> $GITHUB_ENV
 
-        echo "![Status](https://img.shields.io/badge/status-$STATUS-$COLOR)" >> README.md
-        echo "![Auto](https://img.shields.io/badge/automation-active-blue)" >> README.md
-        echo "" >> README.md
+      # 9. Generate graph (ASCII)
+      - name: Generate graph
+        run: |
+          GRAPH=""
+          for T in $(tail -n 10 temp.csv); do
+            BAR=$(printf "%0.s#" $(seq 1 ${T%.*}))
+            GRAPH="$GRAPH\n$BAR"
+          done
 
-        echo "## 🌐 Live Data" >> README.md
-        echo "- 🌡 Temperature: ${TEMP}°C" >> README.md
-        echo "- 💨 Wind: ${WIND} km/h" >> README.md
-        echo "" >> README.md
+          echo -e "GRAPH=$GRAPH" >> $GITHUB_ENV
 
-        echo "## 📈 Temperature Graph" >> README.md
-        echo "![graph](graph.svg)" >> README.md
-        echo "" >> README.md
+      # 10. Generate README
+      - name: Update README
+        run: |
+          echo "# 🚀 Go Auto Engine Dashboard" > README.md
+          echo "" >> README.md
 
-        echo "## 🧠 AI Analysis" >> README.md
-        echo "- Status: $STATE $STATUS" >> README.md
-        echo "- Insight: $REASON" >> README.md
-        echo "- Updated: $(date)" >> README.md
-        echo "" >> README.md
+          echo "## 📊 Live Data" >> README.md
+          echo "- 🌡 Temperature: $TEMP°C" >> README.md
+          echo "- 💨 Wind: $WIND km/h" >> README.md
+          echo "" >> README.md
 
-        echo "---" >> README.md
-        echo "⚡ Powered by GitHub Actions + Open-Meteo API" >> README.md
+          echo "## 🤖 AI Analysis" >> README.md
+          echo "- Status: $STATUS" >> README.md
+          echo "- Insight: $INSIGHT" >> README.md
+          echo "- Trend: $TREND" >> README.md
+          echo "- Prediction: $PREDICT" >> README.md
+          echo "- Updated: $(date)" >> README.md
+          echo "" >> README.md
 
-    # 8. Commit & push
-    - name: Commit & push
-      run: |
-        git config user.name "auto-engine-bot"
-        git config user.email "bot@auto-engine.com"
-        git add README.md temp.csv graph.svg
-        git commit -m "📈 level 3 graph stable update" || echo "no changes"
-        git push
+          echo "## 📈 Temperature Graph" >> README.md
+          echo '```' >> README.md
+          echo -e "$GRAPH" >> README.md
+          echo '```' >> README.md
+
+      # 11. Commit
+      - name: Commit
+        run: |
+          git config user.name "auto-engine-bot"
+          git config user.email "bot@auto.com"
+          git add .
+          git commit -m "🤖 AI prediction update" || echo "no changes"
+          git push
