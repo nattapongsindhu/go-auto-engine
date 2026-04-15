@@ -32,110 +32,85 @@ jobs:
         echo "TEMP=$TEMP" >> $GITHUB_ENV
         echo "WIND=$WIND" >> $GITHUB_ENV
 
-    # 4. AI decision
+    # 4. AI Decision
     - name: AI Decision
       run: |
         if [ "$TEMP" -gt 30 ]; then
           STATUS="WARNING"
           STATE="🟡"
           COLOR="yellow"
-          REASON="High temperature may reduce system efficiency"
-
         elif [ "$TEMP" -lt 10 ]; then
           STATUS="CRITICAL"
           STATE="🔴"
           COLOR="red"
-          REASON="Low temperature may affect system stability"
-
         else
           STATUS="HEALTHY"
           STATE="🟢"
           COLOR="brightgreen"
-          REASON="System operating under optimal conditions"
         fi
 
         echo "STATUS=$STATUS" >> $GITHUB_ENV
         echo "STATE=$STATE" >> $GITHUB_ENV
         echo "COLOR=$COLOR" >> $GITHUB_ENV
-        echo "REASON=$REASON" >> $GITHUB_ENV
 
-    # 5. Load + update history
-    - name: Update history
+    # 5. Save temperature history
+    - name: Save temp history
       run: |
-        if [ -f history.txt ]; then
-          HISTORY=$(cat history.txt)
+        if [ -f temp.csv ]; then
+          echo "$TEMP" >> temp.csv
         else
-          HISTORY=""
+          echo "$TEMP" > temp.csv
         fi
 
-        NEW_HISTORY="$STATE $HISTORY"
-        NEW_HISTORY=$(echo $NEW_HISTORY | cut -d ' ' -f1-10)
+        tail -n 20 temp.csv > temp_trim.csv
+        mv temp_trim.csv temp.csv
 
-        echo "$NEW_HISTORY" > history.txt
-        echo "NEW_HISTORY=$NEW_HISTORY" >> $GITHUB_ENV
-
-    # 6. Trend
-    - name: Analyze trend
+    # 6. Generate graph (SVG)
+    - name: Generate graph
       run: |
-        GREEN=$(echo "$NEW_HISTORY" | grep -o "🟢" | wc -l)
-        RED=$(echo "$NEW_HISTORY" | grep -o "🔴" | wc -l)
+        echo "<svg width='500' height='200' xmlns='http://www.w3.org/2000/svg'>" > graph.svg
 
-        if [ "$RED" -gt "$GREEN" ]; then
-          TREND="📉 Declining"
-        else
-          TREND="📈 Stable"
-        fi
+        X=20
+        PREV_Y=100
 
-        echo "TREND=$TREND" >> $GITHUB_ENV
+        while read VALUE; do
+          Y=$(echo "200 - ($VALUE * 3)" | bc)
+          echo "<circle cx='$X' cy='$Y' r='3' fill='blue' />" >> graph.svg
+          echo "<line x1='$X' y1='$PREV_Y' x2='$X' y2='$Y' stroke='blue' />" >> graph.svg
 
-    # 7. Generate UI Dashboard
+          PREV_Y=$Y
+          X=$((X+20))
+        done < temp.csv
+
+        echo "</svg>" >> graph.svg
+
+    # 7. Generate README
     - name: Generate README
       run: |
         echo "# 🚀 Go Auto Engine Dashboard" > README.md
         echo "" >> README.md
 
         echo "![Status](https://img.shields.io/badge/status-$STATUS-$COLOR)" >> README.md
-        echo "![Auto](https://img.shields.io/badge/automation-active-blue)" >> README.md
         echo "" >> README.md
 
         echo "## 🌐 Live Data" >> README.md
-        echo "- 🌡 Temperature: ${TEMP}°C" >> README.md
-        echo "- 💨 Wind: ${WIND} km/h" >> README.md
+        echo "- Temperature: ${TEMP}°C" >> README.md
+        echo "- Wind: ${WIND} km/h" >> README.md
         echo "" >> README.md
 
-        echo "## 🧠 AI Analysis" >> README.md
-        echo "- Status: $STATE $STATUS" >> README.md
-        echo "- Insight: $REASON" >> README.md
-        echo "- Trend: $TREND" >> README.md
+        echo "## 📈 Temperature Graph" >> README.md
+        echo "![graph](graph.svg)" >> README.md
+        echo "" >> README.md
+
+        echo "## 🧠 Status" >> README.md
+        echo "- $STATE $STATUS" >> README.md
         echo "- Updated: $(date)" >> README.md
-        echo "" >> README.md
-
-        echo "## 📊 System Flow" >> README.md
-        echo '```mermaid' >> README.md
-        echo "flowchart LR" >> README.md
-
-        COUNT=1
-        for item in $NEW_HISTORY; do
-          echo "S$COUNT[$item] -->" >> README.md
-          COUNT=$((COUNT+1))
-        done
-
-        echo "END" >> README.md
-        echo '```' >> README.md
-
-        echo "" >> README.md
-        echo "## 📜 History" >> README.md
-        echo "$NEW_HISTORY" >> README.md
-        echo "" >> README.md
-
-        echo "---" >> README.md
-        echo "⚡ Powered by GitHub Actions + Open-Meteo API" >> README.md
 
     # 8. Commit
     - name: Commit & push
       run: |
         git config user.name "auto-engine-bot"
         git config user.email "bot@auto-engine.com"
-        git add README.md history.txt
-        git commit -m "✨ UI dashboard update" || echo "no changes"
+        git add README.md temp.csv graph.svg
+        git commit -m "📈 level 3 graph update" || echo "no changes"
         git push
