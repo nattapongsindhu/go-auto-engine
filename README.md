@@ -1,23 +1,30 @@
-# 🚀 Go Auto Engine
+# 🚀 Go Auto Engine Dashboard
 
-## 🌐 Real Weather Data
-- Temperature: 14.4°C
-- Wind Speed: 3.1 km/h
+![Status](https://img.shields.io/badge/status-HEALTHY-brightgreen)
+![Auto](https://img.shields.io/badge/automation-active-blue)
+
+## 🌐 Live Data
+- 🌡 Temperature: 14.2°C
+- 💨 Wind: 5.2 km/h
 
 ## 🧠 AI Analysis
-- Status: HEALTHY 🟢
-- Insight: Good weather
-- Trend: ✅ System stable
-- Time: Wed Apr 15 05:44:46 UTC 2026
+- Status: 🟢 HEALTHY
+- Insight: System operating under optimal conditions
+- Trend: 📈 Stable
+- Updated: Wed Apr 15 05:45:48 UTC 2026
 
-## 📊 Trend Chart
+## 📊 System Flow
 ```mermaid
-graph LR
+flowchart LR
 S1[🟢] -->
-S2[🔴] -->
-S3[🟢] -->
+S2[🟢] -->
+S3[🔴] -->
+S4[🟢] -->
 END
 ```
 
 ## 📜 History
-🟢 🔴 🟢
+🟢 🟢 🔴 🟢
+
+---
+⚡ Powered by GitHub Actions + Open-Meteo API
