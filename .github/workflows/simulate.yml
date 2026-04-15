@@ -1,0 +1,13 @@
+name: auto-engine-alive
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: System Check
+        run: echo "⚙️ Auto-Engine is running"
