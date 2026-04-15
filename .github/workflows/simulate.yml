@@ -1,124 +1,80 @@
-name: go-auto-engine
+name: AI Engine Balanced
 
 on:
-  schedule:
-    - cron: '0 3 * * *'
   workflow_dispatch:
-
-permissions:
-  contents: write
+  schedule:
+    - cron: "0 */6 * * *"
 
 jobs:
   engine:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Install jq
-        run: sudo apt-get install -y jq bc
-
-      # 1. Fetch data
       - name: Fetch weather
         run: |
           curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
 
-      # 2. Parse
-      - name: Parse
+      - name: Parse data
         run: |
-          TEMP=$(jq '.current_weather.temperature | floor' weather.json)
-          WIND=$(jq '.current_weather.windspeed | floor' weather.json)
+          TEMP=$(jq '.current_weather.temperature' weather.json)
+          WIND=$(jq '.current_weather.windspeed' weather.json)
 
           echo "TEMP=$TEMP" >> $GITHUB_ENV
           echo "WIND=$WIND" >> $GITHUB_ENV
 
-      # 3. Analyze
-      - name: Analyze
+      - name: AI logic
         run: |
-          if [ "$TEMP" -gt 30 ]; then
+          if (( $(echo "$TEMP > 30" | bc -l) )); then
             STATUS="WARNING"
-          elif [ "$TEMP" -lt 10 ]; then
+            SCORE=60
+          elif (( $(echo "$TEMP < 10" | bc -l) )); then
             STATUS="CRITICAL"
+            SCORE=30
           else
             STATUS="HEALTHY"
+            SCORE=90
           fi
 
           echo "STATUS=$STATUS" >> $GITHUB_ENV
-
-      # 4. Predict
-      - name: Predict
-        run: |
-          if [ "$STATUS" = "WARNING" ]; then
-            TREND="Cooling Soon"
-          elif [ "$STATUS" = "CRITICAL" ]; then
-            TREND="Warming Soon"
-          else
-            TREND="Stable"
-          fi
-
-          echo "TREND=$TREND" >> $GITHUB_ENV
-
-      # 5. Score
-      - name: Score
-        run: |
-          SCORE=$(( TEMP * 2 + WIND ))
           echo "SCORE=$SCORE" >> $GITHUB_ENV
 
-      # 6. Save history
-      - name: Save history
+      - name: Update CSV
         run: |
-          echo "$(date),$TEMP" >> temp.csv
+          echo "$(date +%s),$TEMP" >> temp.csv
 
-      # 7. Generate graph
-      - name: Generate graph
+      - name: Generate PNG graph
         run: |
-          echo "<svg width='400' height='100'>" > graph.svg
-          i=0
-          while IFS=, read -r time temp; do
-            x=$((i*10))
-            y=$((100 - temp))
-            echo "<circle cx='$x' cy='$y' r='2' fill='cyan' />" >> graph.svg
-            i=$((i+1))
-          done < temp.csv
-          echo "</svg>" >> graph.svg
+          sudo apt-get install -y gnuplot
 
-      # 8. Generate README (🔥 สำคัญ)
-      - name: Generate README
-        run: |
-          echo "# 🚀 Go Auto Engine" > README.md
-          echo "" >> README.md
-          echo "## 📊 Live Data" >> README.md
-          echo "- 🌡 Temperature: $TEMP°C" >> README.md
-          echo "- 💨 Wind: $WIND km/h" >> README.md
-          echo "" >> README.md
-          echo "## 🧠 AI Analysis" >> README.md
-          echo "- Status: $STATUS" >> README.md
-          echo "- Trend: $TREND" >> README.md
-          echo "- Score: $SCORE" >> README.md
-          echo "" >> README.md
-          echo "## 📈 Graph" >> README.md
-          echo "<img src='./graph.svg' width='500'/>" >> README.md
-          echo "" >> README.md
-          echo "_Last update: $(date)_" >> README.md
+          echo "
+          set terminal png size 800,400
+          set output 'graph.png'
+          set title 'Temperature History'
+          set xlabel 'Time'
+          set ylabel 'Temp'
+          plot 'temp.csv' using 1:2 with lines
+          " > plot.gp
 
-      # 9. Generate data.json (ใช้กับ UI)
-      - name: Generate JSON
+          gnuplot plot.gp
+
+      - name: Update JSON
         run: |
           echo "{
             \"temp\": $TEMP,
             \"wind\": $WIND,
             \"status\": \"$STATUS\",
-            \"trend\": \"$TREND\",
+            \"trend\": \"Stable\",
             \"score\": $SCORE,
             \"updated\": \"$(date)\"
           }" > data.json
 
-      # 10. Commit
-      - name: Commit
+      - name: Commit changes
         run: |
           git config user.name "bot"
           git config user.email "bot@users.noreply.github.com"
-
           git add .
-          git diff --cached --quiet || git commit -m "auto update"
+          git commit -m "auto update" || echo "no changes"
           git push
