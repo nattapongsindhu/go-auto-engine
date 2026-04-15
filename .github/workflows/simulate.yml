@@ -1,37 +1,67 @@
-- name: Fetch weather (Open-Meteo)
-  run: |
-    curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
+name: go-auto-engine
 
-- name: Parse weather
-  run: |
-    TEMP=$(cat weather.json | jq '.current_weather.temperature')
-    WIND=$(cat weather.json | jq '.current_weather.windspeed')
+on:
+  workflow_dispatch:
 
-    echo "TEMP=$TEMP" >> $GITHUB_ENV
-    echo "WIND=$WIND" >> $GITHUB_ENV
+permissions:
+  contents: write
 
-- name: Decide based on weather
-  run: |
-    if (( $(echo "$TEMP > 30" | bc -l) )); then
-      echo "STATE=WARNING 🟡" >> $GITHUB_ENV
-      echo "REASON=Too hot" >> $GITHUB_ENV
-    elif (( $(echo "$TEMP < 10" | bc -l) )); then
-      echo "STATE=CRITICAL 🔴" >> $GITHUB_ENV
-      echo "REASON=Too cold" >> $GITHUB_ENV
-    else
-      echo "STATE=HEALTHY 🟢" >> $GITHUB_ENV
-      echo "REASON=Good weather" >> $GITHUB_ENV
-    fi
+jobs:
+  weather-agent:
+    runs-on: ubuntu-latest
 
-- name: Generate README
-  run: |
-    echo "# 🚀 Go Auto Engine" > README.md
-    echo "" >> README.md
-    echo "## 🌐 Real Data System" >> README.md
-    echo "- Temperature: ${TEMP}°C" >> README.md
-    echo "- Wind Speed: ${WIND} km/h" >> README.md
-    echo "" >> README.md
-    echo "## 🧠 Decision" >> README.md
-    echo "- Status: $STATE" >> README.md
-    echo "- Reason: $REASON" >> README.md
-    echo "- Time: $(date)" >> README.md
+    steps:
+      # 1. checkout
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # 2. fetch weather
+      - name: Fetch weather
+        run: |
+          curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
+
+      # 3. parse json
+      - name: Parse weather
+        run: |
+          TEMP=$(jq '.current_weather.temperature' weather.json)
+          WIND=$(jq '.current_weather.windspeed' weather.json)
+
+          echo "TEMP=$TEMP" >> $GITHUB_ENV
+          echo "WIND=$WIND" >> $GITHUB_ENV
+
+      # 4. decision (ไม่ใช้ bc แล้ว)
+      - name: Decide
+        run: |
+          if [ "$TEMP" -gt 30 ]; then
+            echo "STATE=WARNING 🟡" >> $GITHUB_ENV
+            echo "REASON=Too hot" >> $GITHUB_ENV
+          elif [ "$TEMP" -lt 10 ]; then
+            echo "STATE=CRITICAL 🔴" >> $GITHUB_ENV
+            echo "REASON=Too cold" >> $GITHUB_ENV
+          else
+            echo "STATE=HEALTHY 🟢" >> $GITHUB_ENV
+            echo "REASON=Good weather" >> $GITHUB_ENV
+          fi
+
+      # 5. generate README
+      - name: Generate README
+        run: |
+          echo "# 🚀 Go Auto Engine" > README.md
+          echo "" >> README.md
+          echo "## 🌐 Real Weather Data" >> README.md
+          echo "- Temperature: ${TEMP}°C" >> README.md
+          echo "- Wind: ${WIND} km/h" >> README.md
+          echo "" >> README.md
+          echo "## 🧠 Decision" >> README.md
+          echo "- Status: $STATE" >> README.md
+          echo "- Reason: $REASON" >> README.md
+          echo "- Time: $(date)" >> README.md
+
+      # 6. commit
+      - name: Commit and push
+        run: |
+          git config user.name "auto-engine-bot"
+          git config user.email "bot@auto-engine.com"
+          git add README.md
+          git commit -m "🌐 real weather update" || echo "no changes"
+          git push
