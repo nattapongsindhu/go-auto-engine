@@ -2,7 +2,7 @@ name: go-auto-engine
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -13,109 +13,111 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. checkout
-      - name: Checkout repo
-        uses: actions/checkout@v4
 
-      # 2. fetch weather
-      - name: Fetch weather
-        run: |
-          curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
+    # 1. Checkout repo
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      # 3. parse weather
-      - name: Parse weather
-        run: |
-          TEMP=$(jq '.current_weather.temperature' weather.json)
-          WIND=$(jq '.current_weather.windspeed' weather.json)
+    # 2. Fetch weather data
+    - name: Fetch weather (Open-Meteo)
+      run: |
+        curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
 
-          echo "TEMP=$TEMP" >> $GITHUB_ENV
-          echo "WIND=$WIND" >> $GITHUB_ENV
+    # 3. Parse data
+    - name: Parse weather
+      run: |
+        TEMP=$(cat weather.json | jq '.current_weather.temperature')
+        WIND=$(cat weather.json | jq '.current_weather.windspeed')
 
-      # 4. AI-like decision
-      - name: Smart Decision
-        run: |
-          if [ "$TEMP" -gt 30 ]; then
-            STATE="🟡"
-            STATUS="WARNING"
-            REASON="High temperature detected. System efficiency may decrease."
+        echo "TEMP=$TEMP" >> $GITHUB_ENV
+        echo "WIND=$WIND" >> $GITHUB_ENV
 
-          elif [ "$TEMP" -lt 10 ]; then
-            STATE="🔴"
-            STATUS="CRITICAL"
-            REASON="Low temperature detected. System stability at risk."
+    # 4. AI Decision Logic
+    - name: AI Decision
+      run: |
+        if (( $(echo "$TEMP > 30" | bc -l) )); then
+          echo "STATUS=WARNING" >> $GITHUB_ENV
+          echo "STATE=🟡" >> $GITHUB_ENV
+          echo "REASON=Too hot" >> $GITHUB_ENV
+        elif (( $(echo "$TEMP < 10" | bc -l) )); then
+          echo "STATUS=CRITICAL" >> $GITHUB_ENV
+          echo "STATE=🔴" >> $GITHUB_ENV
+          echo "REASON=Too cold" >> $GITHUB_ENV
+        else
+          echo "STATUS=HEALTHY" >> $GITHUB_ENV
+          echo "STATE=🟢" >> $GITHUB_ENV
+          echo "REASON=Good weather" >> $GITHUB_ENV
+        fi
 
-          else
-            STATE="🟢"
-            STATUS="HEALTHY"
-            REASON="Weather conditions are optimal. System running smoothly."
-          fi
+    # 5. Load history
+    - name: Load history
+      run: |
+        if [ -f history.txt ]; then
+          HISTORY=$(cat history.txt)
+        else
+          HISTORY=""
+        fi
 
-          echo "STATE=$STATE" >> $GITHUB_ENV
-          echo "STATUS=$STATUS" >> $GITHUB_ENV
-          echo "REASON=$REASON" >> $GITHUB_ENV
+        NEW_HISTORY="$STATE $HISTORY"
+        NEW_HISTORY=$(echo $NEW_HISTORY | cut -d ' ' -f1-10)
 
-      # 5. load history
-      - name: Load history
-        run: |
-          if [ -f history.txt ]; then
-            HISTORY=$(cat history.txt)
-          else
-            HISTORY=""
-          fi
-          echo "HISTORY=$HISTORY" >> $GITHUB_ENV
+        echo "$NEW_HISTORY" > history.txt
+        echo "NEW_HISTORY=$NEW_HISTORY" >> $GITHUB_ENV
 
-      # 6. update history
-      - name: Update history
-        run: |
-          NEW_HISTORY="$HISTORY $STATE"
-          echo "$NEW_HISTORY" > history.txt
-          echo "NEW_HISTORY=$NEW_HISTORY" >> $GITHUB_ENV
+    # 6. Trend analysis
+    - name: Analyze trend
+      run: |
+        COUNT_GREEN=$(echo "$NEW_HISTORY" | grep -o "🟢" | wc -l)
+        COUNT_RED=$(echo "$NEW_HISTORY" | grep -o "🔴" | wc -l)
 
-      # 7. analyze trend
-      - name: Analyze trend
-        run: |
-          if [[ "$NEW_HISTORY" == *"🟢 🟢 🟢"* ]]; then
-            TREND="IMPROVING 📈"
-          elif [[ "$NEW_HISTORY" == *"🔴 🔴"* ]]; then
-            TREND="DECLINING 📉"
-          else
-            TREND="STABLE ➖"
-          fi
+        if [ "$COUNT_RED" -gt "$COUNT_GREEN" ]; then
+          TREND="⚠️ System unstable"
+        else
+          TREND="✅ System stable"
+        fi
 
-          echo "TREND=$TREND" >> $GITHUB_ENV
+        echo "TREND=$TREND" >> $GITHUB_ENV
 
-      # 8. generate README
-      - name: Generate README
-        run: |
-          echo "# 🚀 Go Auto Engine" > README.md
-          echo "" >> README.md
+    # 7. Generate README Dashboard
+    - name: Generate README
+      run: |
+        echo "# 🚀 Go Auto Engine" > README.md
+        echo "" >> README.md
 
-          echo "## 🌐 Real Weather Data (LA)" >> README.md
-          echo "- Temperature: ${TEMP}°C" >> README.md
-          echo "- Wind Speed: ${WIND} km/h" >> README.md
-          echo "" >> README.md
+        echo "## 🌐 Real Weather Data" >> README.md
+        echo "- Temperature: ${TEMP}°C" >> README.md
+        echo "- Wind Speed: ${WIND} km/h" >> README.md
+        echo "" >> README.md
 
-          echo "## 🧠 AI Analysis" >> README.md
-          echo "- Status: $STATUS $STATE" >> README.md
-          echo "- Insight: $REASON" >> README.md
-          echo "- Trend: $TREND" >> README.md
-          echo "- Time: $(date)" >> README.md
-          echo "" >> README.md
+        echo "## 🧠 AI Analysis" >> README.md
+        echo "- Status: $STATUS $STATE" >> README.md
+        echo "- Insight: $REASON" >> README.md
+        echo "- Trend: $TREND" >> README.md
+        echo "- Time: $(date)" >> README.md
+        echo "" >> README.md
 
-          echo "## 📊 History" >> README.md
-          echo "$NEW_HISTORY" >> README.md
-          echo "" >> README.md
+        echo "## 📊 Trend Chart" >> README.md
+        echo '```mermaid' >> README.md
+        echo "graph LR" >> README.md
 
-          echo "## 🔄 System Info" >> README.md
-          echo "- Engine: Go-Auto-Engine" >> README.md
-          echo "- Mode: AI-like + Real Data + Trend" >> README.md
-          echo "- Cost: FREE 💸" >> README.md
+        COUNT=1
+        for item in $NEW_HISTORY; do
+          echo "S$COUNT[$item] -->" >> README.md
+          COUNT=$((COUNT+1))
+        done
 
-      # 9. commit
-      - name: Commit and push
-        run: |
-          git config user.name "auto-engine-bot"
-          git config user.email "bot@auto-engine.com"
-          git add README.md history.txt
-          git commit -m "🚀 level 2 system update" || echo "no changes"
-          git push
+        echo "END" >> README.md
+        echo '```' >> README.md
+
+        echo "" >> README.md
+        echo "## 📜 History" >> README.md
+        echo "$NEW_HISTORY" >> README.md
+
+    # 8. Commit changes
+    - name: Commit & push
+      run: |
+        git config user.name "auto-engine-bot"
+        git config user.email "bot@auto-engine.com"
+        git add README.md history.txt
+        git commit -m "auto update dashboard" || echo "no changes"
+        git push
