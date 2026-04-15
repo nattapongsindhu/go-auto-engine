@@ -9,20 +9,20 @@ permissions:
   contents: write
 
 jobs:
-  weather-agent:
+  engine:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. โหลด repo
+      # 1. checkout
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # 2. ดึงข้อมูล weather (ฟรี API)
-      - name: Fetch weather (Open-Meteo)
+      # 2. fetch weather
+      - name: Fetch weather
         run: |
           curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
 
-      # 3. parse JSON
+      # 3. parse weather
       - name: Parse weather
         run: |
           TEMP=$(jq '.current_weather.temperature' weather.json)
@@ -31,23 +31,60 @@ jobs:
           echo "TEMP=$TEMP" >> $GITHUB_ENV
           echo "WIND=$WIND" >> $GITHUB_ENV
 
-      # 4. AI-like decision (ฟรี 100%)
+      # 4. AI-like decision
       - name: Smart Decision
         run: |
           if [ "$TEMP" -gt 30 ]; then
-            echo "STATE=WARNING 🟡" >> $GITHUB_ENV
-            echo "REASON=Temperature is high. System performance may degrade under heat conditions." >> $GITHUB_ENV
+            STATE="🟡"
+            STATUS="WARNING"
+            REASON="High temperature detected. System efficiency may decrease."
 
           elif [ "$TEMP" -lt 10 ]; then
-            echo "STATE=CRITICAL 🔴" >> $GITHUB_ENV
-            echo "REASON=Temperature is too low. System stability could be affected by extreme cold." >> $GITHUB_ENV
+            STATE="🔴"
+            STATUS="CRITICAL"
+            REASON="Low temperature detected. System stability at risk."
 
           else
-            echo "STATE=HEALTHY 🟢" >> $GITHUB_ENV
-            echo "REASON=Environmental conditions are optimal. System operating normally." >> $GITHUB_ENV
+            STATE="🟢"
+            STATUS="HEALTHY"
+            REASON="Weather conditions are optimal. System running smoothly."
           fi
 
-      # 5. สร้าง README
+          echo "STATE=$STATE" >> $GITHUB_ENV
+          echo "STATUS=$STATUS" >> $GITHUB_ENV
+          echo "REASON=$REASON" >> $GITHUB_ENV
+
+      # 5. load history
+      - name: Load history
+        run: |
+          if [ -f history.txt ]; then
+            HISTORY=$(cat history.txt)
+          else
+            HISTORY=""
+          fi
+          echo "HISTORY=$HISTORY" >> $GITHUB_ENV
+
+      # 6. update history
+      - name: Update history
+        run: |
+          NEW_HISTORY="$HISTORY $STATE"
+          echo "$NEW_HISTORY" > history.txt
+          echo "NEW_HISTORY=$NEW_HISTORY" >> $GITHUB_ENV
+
+      # 7. analyze trend
+      - name: Analyze trend
+        run: |
+          if [[ "$NEW_HISTORY" == *"🟢 🟢 🟢"* ]]; then
+            TREND="IMPROVING 📈"
+          elif [[ "$NEW_HISTORY" == *"🔴 🔴"* ]]; then
+            TREND="DECLINING 📉"
+          else
+            TREND="STABLE ➖"
+          fi
+
+          echo "TREND=$TREND" >> $GITHUB_ENV
+
+      # 8. generate README
       - name: Generate README
         run: |
           echo "# 🚀 Go Auto Engine" > README.md
@@ -58,22 +95,27 @@ jobs:
           echo "- Wind Speed: ${WIND} km/h" >> README.md
           echo "" >> README.md
 
-          echo "## 🧠 AI Analysis (Free Mode)" >> README.md
-          echo "- Status: $STATE" >> README.md
+          echo "## 🧠 AI Analysis" >> README.md
+          echo "- Status: $STATUS $STATE" >> README.md
           echo "- Insight: $REASON" >> README.md
+          echo "- Trend: $TREND" >> README.md
           echo "- Time: $(date)" >> README.md
+          echo "" >> README.md
+
+          echo "## 📊 History" >> README.md
+          echo "$NEW_HISTORY" >> README.md
           echo "" >> README.md
 
           echo "## 🔄 System Info" >> README.md
           echo "- Engine: Go-Auto-Engine" >> README.md
-          echo "- Mode: AI-like (Rule-based)" >> README.md
+          echo "- Mode: AI-like + Real Data + Trend" >> README.md
           echo "- Cost: FREE 💸" >> README.md
 
-      # 6. commit กลับ repo
+      # 9. commit
       - name: Commit and push
         run: |
           git config user.name "auto-engine-bot"
           git config user.email "bot@auto-engine.com"
-          git add README.md
-          git commit -m "🤖 auto update (real data + AI)" || echo "no changes"
+          git add README.md history.txt
+          git commit -m "🚀 level 2 system update" || echo "no changes"
           git push
