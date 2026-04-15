@@ -1,140 +1,155 @@
-name: ai-engine-balanced
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AI Engine Dashboard</title>
 
-on:
-  schedule:
-    - cron: "0 */6 * * *"
-  workflow_dispatch:
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-concurrency:
-  group: ai-engine
-  cancel-in-progress: true
+  <style>
+    body {
+      font-family: Arial;
+      background: #0f172a;
+      color: white;
+      text-align: center;
+      padding: 40px;
+    }
 
-permissions:
-  contents: write
+    h1 {
+      color: #38bdf8;
+    }
 
-jobs:
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
 
-  analyze:
-    runs-on: ubuntu-latest
-    outputs:
-      temp: ${{ steps.data.outputs.temp }}
-      wind: ${{ steps.data.outputs.wind }}
+    .card {
+      background: #1e293b;
+      padding: 20px;
+      margin: 10px;
+      border-radius: 12px;
+      width: 260px;
 
-    steps:
-      - uses: actions/checkout@v4
+      /* 🔥 glow effect */
+      box-shadow: 0 0 15px rgba(56,189,248,0.3);
 
-      - name: Install jq
-        run: sudo apt-get install -y jq
+      transition: transform 0.2s;
+    }
 
-      - name: Fetch weather
-        id: data
-        run: |
-          curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
+    .card:hover {
+      transform: scale(1.05);
+    }
 
-          TEMP=$(jq '.current_weather.temperature | floor' weather.json)
-          WIND=$(jq '.current_weather.windspeed | floor' weather.json)
+    .big {
+      font-size: 26px;
+      margin: 10px 0;
+    }
 
-          echo "temp=$TEMP" >> $GITHUB_OUTPUT
-          echo "wind=$WIND" >> $GITHUB_OUTPUT
+    .healthy { color: #22c55e; }
+    .warning { color: #facc15; }
+    .danger { color: #ef4444; }
 
-  decide:
-    runs-on: ubuntu-latest
-    needs: analyze
-    outputs:
-      status: ${{ steps.decision.outputs.status }}
+    canvas {
+      max-width: 700px;
+      margin-top: 30px;
+    }
+  </style>
+</head>
 
-    steps:
-      - id: decision
-        run: |
-          TEMP=${{ needs.analyze.outputs.temp }}
+<body>
 
-          if [ "$TEMP" -gt 35 ]; then
-            STATUS="DANGER"
-          elif [ "$TEMP" -gt 30 ]; then
-            STATUS="WARNING"
-          elif [ "$TEMP" -lt 5 ]; then
-            STATUS="CRITICAL"
-          else
-            STATUS="HEALTHY"
-          fi
+<h1>🚀 AI Monitoring Dashboard</h1>
 
-          echo "status=$STATUS" >> $GITHUB_OUTPUT
+<div class="container">
 
-  predict:
-    runs-on: ubuntu-latest
-    needs: analyze
-    outputs:
-      trend: ${{ steps.pred.outputs.trend }}
+  <div class="card">
+    <h3>🌡 Temp</h3>
+    <div class="big" id="temp">--</div>
+  </div>
 
-    steps:
-      - uses: actions/checkout@v4
+  <div class="card">
+    <h3>💨 Wind</h3>
+    <div class="big" id="wind">--</div>
+  </div>
 
-      - id: pred
-        run: |
-          TEMP=${{ needs.analyze.outputs.temp }}
+  <div class="card">
+    <h3>🤖 Status</h3>
+    <div class="big" id="status">--</div>
+  </div>
 
-          if [ ! -f history.txt ]; then
-            echo "$TEMP" > history.txt
-            TREND="NEW"
-          else
-            LAST=$(tail -n 1 history.txt)
+  <div class="card">
+    <h3>📈 Trend</h3>
+    <div class="big" id="trend">--</div>
+  </div>
 
-            if [ "$TEMP" -gt "$LAST" ]; then
-              TREND="UP"
-            elif [ "$TEMP" -lt "$LAST" ]; then
-              TREND="DOWN"
-            else
-              TREND="STABLE"
-            fi
+  <div class="card">
+    <h3>🧮 Score</h3>
+    <div class="big" id="score">--</div>
+  </div>
 
-            echo "$TEMP" >> history.txt
-          fi
+</div>
 
-          echo "trend=$TREND" >> $GITHUB_OUTPUT
+<canvas id="chart"></canvas>
 
-  score:
-    runs-on: ubuntu-latest
-    needs: decide
-    outputs:
-      score: ${{ steps.calc.outputs.score }}
+<script>
 
-    steps:
-      - id: calc
-        run: |
-          STATUS=${{ needs.decide.outputs.status }}
+let chart;
+let history = [];
 
-          SCORE=100
-          if [ "$STATUS" = "WARNING" ]; then SCORE=70; fi
-          if [ "$STATUS" = "CRITICAL" ]; then SCORE=40; fi
-          if [ "$STATUS" = "DANGER" ]; then SCORE=10; fi
+async function loadData() {
+  const res = await fetch('./data.json');
+  const d = await res.json();
 
-          echo "score=$SCORE" >> $GITHUB_OUTPUT
+  document.getElementById('temp').innerText = d.temp + "°C";
+  document.getElementById('wind').innerText = d.wind + " km/h";
 
-  update:
-    runs-on: ubuntu-latest
-    needs: [analyze, decide, predict, score]
+  let cls = "healthy";
+  if (d.status === "WARNING") cls = "warning";
+  if (d.status === "CRITICAL" || d.status === "DANGER") cls = "danger";
 
-    steps:
-      - uses: actions/checkout@v4
+  document.getElementById('status').innerHTML =
+    `<span class="${cls}">${d.status}</span>`;
 
-      - name: Generate data.json
-        run: |
-          echo "{
-            \"temp\": ${{ needs.analyze.outputs.temp }},
-            \"wind\": ${{ needs.analyze.outputs.wind }},
-            \"status\": \"${{ needs.decide.outputs.status }}\",
-            \"trend\": \"${{ needs.predict.outputs.trend }}\",
-            \"score\": ${{ needs.score.outputs.score }},
-            \"updated\": \"$(date)\"
-          }" > data.json
+  document.getElementById('trend').innerText = d.trend;
+  document.getElementById('score').innerText = d.score;
 
-      - name: Commit
-        run: |
-          git config user.name "ai-bot"
-          git config user.email "bot@ai.com"
+  history.push(d.temp);
+  if (history.length > 20) history.shift();
 
-          git add .
+  updateChart();
+}
 
-          git diff --cached --quiet || git commit -m "auto update"
+function updateChart() {
+  if (!chart) {
+    chart = new Chart(document.getElementById('chart'), {
+      type: 'line',
+      data: {
+        labels: history.map((_, i) => i),
+        datasets: [{
+          label: 'Temperature',
+          data: history,
+          tension: 0.4,
+          borderWidth: 2
+        }]
+      },
+      options: {
+        animation: {
+          duration: 1000   // 🔥 animation
+        }
+      }
+    });
+  } else {
+    chart.data.labels = history.map((_, i) => i);
+    chart.data.datasets[0].data = history;
+    chart.update();
+  }
+}
 
-          git push
+loadData();
+setInterval(loadData, 60000);
+
+</script>
+
+</body>
+</html>
