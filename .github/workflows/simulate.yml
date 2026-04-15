@@ -5,23 +5,22 @@ on:
   schedule:
     - cron: "0 */6 * * *"
 
+permissions:
+  contents: write   # 🔥 ตัวนี้สำคัญมาก
+
 jobs:
   engine:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # ✅ Fetch weather
       - name: Fetch weather
         run: |
           curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
 
-      # ✅ Parse (safe)
-      - name: Parse data
+      - name: Parse
         run: |
           TEMP=$(jq '.current_weather.temperature' weather.json)
           WIND=$(jq '.current_weather.windspeed' weather.json)
@@ -29,7 +28,6 @@ jobs:
           echo "TEMP=$TEMP" >> $GITHUB_ENV
           echo "WIND=$WIND" >> $GITHUB_ENV
 
-      # ✅ Logic (simple)
       - name: Logic
         run: |
           if [ "$TEMP" -gt 30 ]; then
@@ -40,44 +38,28 @@ jobs:
 
           echo "STATUS=$STATUS" >> $GITHUB_ENV
 
-      # ✅ CSV (กันพัง)
-      - name: Update CSV
+      - name: Update files
         run: |
-          touch temp.csv
           echo "$TEMP" >> temp.csv
 
-      # ✅ Graph (simple SVG)
-      - name: Generate graph
-        run: |
           echo "<svg xmlns='http://www.w3.org/2000/svg' width='400' height='100'>
-          <rect width='400' height='100' fill='#0f172a'/>
-          <text x='20' y='60' fill='#22c55e' font-size='24'>
-          Temp: $TEMP °C
-          </text>
+          <text x='20' y='50'>Temp: $TEMP</text>
           </svg>" > graph.svg
 
-      # ✅ JSON
-      - name: Update JSON
-        run: |
           echo "{
             \"temp\": $TEMP,
             \"wind\": $WIND,
             \"status\": \"$STATUS\"
           }" > data.json
 
-      # 🔥 FIX สำคัญที่สุด (กัน exit 128)
-      - name: Commit safely
+      # 🔥 FIX จริงอยู่ตรงนี้
+      - name: Commit & Push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions@users.noreply.github.com"
 
           git add .
 
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
+          git commit -m "auto update" || echo "no change"
 
-          git commit -m "auto update"
-          git pull --rebase origin main
-          git push origin main
+          git push
