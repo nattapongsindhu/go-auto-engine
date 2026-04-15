@@ -22,7 +22,7 @@
 ## 📈 Graph
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/nattapongsindhu/go-auto-engine/main/graph.svg" width="600"/>
+  <img src="https://raw.githubusercontent.com/nattapongsindhu/go-auto-engine/main/graph.png" width="600"/>
 </p>
 
 ---
