@@ -9,85 +9,69 @@ permissions:
   contents: write
 
 jobs:
-  auto-engine:
+
+  # 🤖 Agent A: Analyze
+  analyze:
     runs-on: ubuntu-latest
+    outputs:
+      count: ${{ steps.count.outputs.count }}
 
     steps:
-      # 1. โหลด repo
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2. สร้างสถานะใหม่ (ยังใช้ logic เดิม)
-      - name: Generate status
+      - id: count
         run: |
           COUNT=$(git rev-list --count HEAD)
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+
+  # 🧠 Agent B: Decide
+  decide:
+    runs-on: ubuntu-latest
+    needs: analyze
+    outputs:
+      state: ${{ steps.decision.outputs.state }}
+      status: ${{ steps.decision.outputs.status }}
+
+    steps:
+      - id: decision
+        run: |
+          COUNT=${{ needs.analyze.outputs.count }}
 
           if [ $COUNT -gt 10 ]; then
-            STATE="🟢"
-            STATUS="HEALTHY"
+            echo "state=🟢" >> $GITHUB_OUTPUT
+            echo "status=HEALTHY" >> $GITHUB_OUTPUT
           elif [ $COUNT -gt 5 ]; then
-            STATE="🟡"
-            STATUS="WARNING"
+            echo "state=🟡" >> $GITHUB_OUTPUT
+            echo "status=WARNING" >> $GITHUB_OUTPUT
           else
-            STATE="🔴"
-            STATUS="CRITICAL"
+            echo "state=🔴" >> $GITHUB_OUTPUT
+            echo "status=CRITICAL" >> $GITHUB_OUTPUT
           fi
 
-          echo "STATE=$STATE" >> $GITHUB_ENV
-          echo "STATUS=$STATUS" >> $GITHUB_ENV
+  # 📊 Agent C: Update
+  update:
+    runs-on: ubuntu-latest
+    needs: [analyze, decide]
 
-      # 3. โหลด history เก่า
-      - name: Load history
-        run: |
-          if [ -f history.txt ]; then
-            HISTORY=$(cat history.txt)
-          else
-            HISTORY=""
-          fi
+    steps:
+      - uses: actions/checkout@v4
 
-          echo "HISTORY=$HISTORY" >> $GITHUB_ENV
-
-      # 4. update history
-      - name: Update history
-        run: |
-          NEW_HISTORY="$HISTORY $STATE"
-          echo $NEW_HISTORY > history.txt
-          echo "NEW_HISTORY=$NEW_HISTORY" >> $GITHUB_ENV
-
-      # 5. วิเคราะห์ trend
-      - name: Analyze trend
-        run: |
-          if [[ "$NEW_HISTORY" == *"🟢 🟢 🟢"* ]]; then
-            TREND="IMPROVING 📈"
-          elif [[ "$NEW_HISTORY" == *"🔴 🔴"* ]]; then
-            TREND="DECLINING 📉"
-          else
-            TREND="STABLE ➖"
-          fi
-
-          echo "TREND=$TREND" >> $GITHUB_ENV
-
-      # 6. สร้าง README
       - name: Generate README
         run: |
           echo "# 🚀 Go Auto Engine" > README.md
           echo "" >> README.md
           echo "## 🧠 System Status" >> README.md
-          echo "- Status: $STATUS $STATE" >> README.md
-          echo "- Trend: $TREND" >> README.md
+          echo "- Status: ${{ needs.decide.outputs.status }} ${{ needs.decide.outputs.state }}" >> README.md
+          echo "- Total Commits: ${{ needs.analyze.outputs.count }}" >> README.md
           echo "- Time: $(date)" >> README.md
           echo "" >> README.md
-          echo "## 📊 History" >> README.md
-          echo "$NEW_HISTORY" >> README.md
-          echo "" >> README.md
-          echo "## 🔄 Auto Update" >> README.md
-          echo "This file is updated automatically by GitHub Actions." >> README.md
+          echo "## 🤖 Multi-Agent System" >> README.md
+          echo "- Analyze → Decide → Update" >> README.md
 
-      # 7. commit + push
       - name: Commit and push
         run: |
           git config user.name "auto-engine-bot"
           git config user.email "bot@auto-engine.com"
-          git add README.md history.txt
-          git commit -m "📊 trend update ($STATUS)" || echo "no changes"
+          git add README.md
+          git commit -m "🤖 multi-agent update" || echo "no changes"
           git push
