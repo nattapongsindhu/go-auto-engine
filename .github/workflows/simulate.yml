@@ -1,8 +1,8 @@
-name: ai-engine-balanced
+name: go-auto-engine
 
 on:
   schedule:
-    - cron: '0 3 * * *'   # SAFE: run once per day
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 permissions:
@@ -13,19 +13,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 1. Fetch weather
+      - name: Install jq
+        run: sudo apt-get install -y jq bc
+
+      # 1. Fetch data
       - name: Fetch weather
         run: |
           curl -s "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
 
-      # 2. Parse data
-      - name: Parse data
+      # 2. Parse
+      - name: Parse
         run: |
-          TEMP=$(jq '.current_weather.temperature' weather.json)
-          WIND=$(jq '.current_weather.windspeed' weather.json)
+          TEMP=$(jq '.current_weather.temperature | floor' weather.json)
+          WIND=$(jq '.current_weather.windspeed | floor' weather.json)
 
           echo "TEMP=$TEMP" >> $GITHUB_ENV
           echo "WIND=$WIND" >> $GITHUB_ENV
@@ -33,12 +35,12 @@ jobs:
       # 3. Analyze
       - name: Analyze
         run: |
-          if (( $(echo "$TEMP > 30" | bc -l) )); then
-            STATUS="HOT"
-          elif (( $(echo "$TEMP < 10" | bc -l) )); then
-            STATUS="COLD"
+          if [ "$TEMP" -gt 30 ]; then
+            STATUS="WARNING"
+          elif [ "$TEMP" -lt 10 ]; then
+            STATUS="CRITICAL"
           else
-            STATUS="NORMAL"
+            STATUS="HEALTHY"
           fi
 
           echo "STATUS=$STATUS" >> $GITHUB_ENV
@@ -46,9 +48,9 @@ jobs:
       # 4. Predict
       - name: Predict
         run: |
-          if [ "$STATUS" = "HOT" ]; then
+          if [ "$STATUS" = "WARNING" ]; then
             TREND="Cooling Soon"
-          elif [ "$STATUS" = "COLD" ]; then
+          elif [ "$STATUS" = "CRITICAL" ]; then
             TREND="Warming Soon"
           else
             TREND="Stable"
@@ -59,7 +61,7 @@ jobs:
       # 5. Score
       - name: Score
         run: |
-          SCORE=$(( (TEMP * 2) + WIND ))
+          SCORE=$(( TEMP * 2 + WIND ))
           echo "SCORE=$SCORE" >> $GITHUB_ENV
 
       # 6. Save history
@@ -70,7 +72,7 @@ jobs:
       # 7. Generate graph
       - name: Generate graph
         run: |
-          echo "<svg width='300' height='100'>" > graph.svg
+          echo "<svg width='400' height='100'>" > graph.svg
           i=0
           while IFS=, read -r time temp; do
             x=$((i*10))
@@ -80,8 +82,27 @@ jobs:
           done < temp.csv
           echo "</svg>" >> graph.svg
 
-      # 8. Build JSON
-      - name: Build JSON
+      # 8. Generate README (🔥 สำคัญ)
+      - name: Generate README
+        run: |
+          echo "# 🚀 Go Auto Engine" > README.md
+          echo "" >> README.md
+          echo "## 📊 Live Data" >> README.md
+          echo "- 🌡 Temperature: $TEMP°C" >> README.md
+          echo "- 💨 Wind: $WIND km/h" >> README.md
+          echo "" >> README.md
+          echo "## 🧠 AI Analysis" >> README.md
+          echo "- Status: $STATUS" >> README.md
+          echo "- Trend: $TREND" >> README.md
+          echo "- Score: $SCORE" >> README.md
+          echo "" >> README.md
+          echo "## 📈 Graph" >> README.md
+          echo "<img src='./graph.svg' width='500'/>" >> README.md
+          echo "" >> README.md
+          echo "_Last update: $(date)_" >> README.md
+
+      # 9. Generate data.json (ใช้กับ UI)
+      - name: Generate JSON
         run: |
           echo "{
             \"temp\": $TEMP,
@@ -92,11 +113,12 @@ jobs:
             \"updated\": \"$(date)\"
           }" > data.json
 
-      # 9. Commit changes
-      - name: Commit & push
+      # 10. Commit
+      - name: Commit
         run: |
           git config user.name "bot"
           git config user.email "bot@users.noreply.github.com"
+
           git add .
-          git commit -m "auto update" || echo "no changes"
+          git diff --cached --quiet || git commit -m "auto update"
           git push
