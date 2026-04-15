@@ -3,6 +3,7 @@ name: auto-engine-alive
 on:
   schedule:
     - cron: '*/5 * * * *'
+  workflow_dispatch:
 
 jobs:
   test:
@@ -10,4 +11,4 @@ jobs:
 
     steps:
       - name: System Check
-        run: echo "⚙️ Auto-Engine is running"
+        run: echo "⚙️ go-auto-engine is running"
