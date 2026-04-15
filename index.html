@@ -14,45 +14,25 @@
       padding: 40px;
     }
 
-    h1 {
-      color: #38bdf8;
-    }
-
-    .container {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
     .card {
       background: #1e293b;
       padding: 20px;
       margin: 10px;
       border-radius: 12px;
-      width: 260px;
 
-      /* 🔥 glow effect */
-      box-shadow: 0 0 15px rgba(56,189,248,0.3);
+      /* glow */
+      box-shadow: 0 0 10px rgba(56,189,248,0.3);
 
-      transition: transform 0.2s;
+      animation: fadeIn 1s ease-in-out;
     }
 
-    .card:hover {
-      transform: scale(1.05);
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px);}
+      to { opacity: 1; transform: translateY(0);}
     }
-
-    .big {
-      font-size: 26px;
-      margin: 10px 0;
-    }
-
-    .healthy { color: #22c55e; }
-    .warning { color: #facc15; }
-    .danger { color: #ef4444; }
 
     canvas {
-      max-width: 700px;
-      margin-top: 30px;
+      margin-top: 20px;
     }
   </style>
 </head>
@@ -61,94 +41,50 @@
 
 <h1>🚀 Go Auto Engine</h1>
 <p>Analyze → Predict → Score → Decide</p>
-<div class="container">
+<div class="card" id="data">Loading...</div>
 
-  <div class="card">
-    <h3>🌡 Temp</h3>
-    <div class="big" id="temp">--</div>
-  </div>
-
-  <div class="card">
-    <h3>💨 Wind</h3>
-    <div class="big" id="wind">--</div>
-  </div>
-
-  <div class="card">
-    <h3>🤖 Status</h3>
-    <div class="big" id="status">--</div>
-  </div>
-
-  <div class="card">
-    <h3>📈 Trend</h3>
-    <div class="big" id="trend">--</div>
-  </div>
-
-  <div class="card">
-    <h3>🧮 Score</h3>
-    <div class="big" id="score">--</div>
-  </div>
-
-</div>
-
-<canvas id="chart"></canvas>
+<canvas id="chart" width="300" height="150"></canvas>
 
 <script>
-
-let chart;
-let history = [];
-
 async function loadData() {
   const res = await fetch('./data.json');
   const d = await res.json();
 
-  document.getElementById('temp').innerText = d.temp + "°C";
-  document.getElementById('wind').innerText = d.wind + " km/h";
-
-  let cls = "healthy";
-  if (d.status === "WARNING") cls = "warning";
-  if (d.status === "CRITICAL" || d.status === "DANGER") cls = "danger";
-
-  document.getElementById('status').innerHTML =
-    `<span class="${cls}">${d.status}</span>`;
-
-  document.getElementById('trend').innerText = d.trend;
-  document.getElementById('score').innerText = d.score;
-
-  history.push(d.temp);
-  if (history.length > 20) history.shift();
-
-  updateChart();
+  document.getElementById("data").innerHTML = `
+    🌡 Temp: ${d.temp}°C <br>
+    💨 Wind: ${d.wind} km/h <br>
+    🧠 Status: ${d.status} <br>
+    📈 Trend: ${d.trend} <br>
+    🎯 Score: ${d.score} <br>
+    ⏱ Updated: ${d.updated}
+  `;
 }
 
-function updateChart() {
-  if (!chart) {
-    chart = new Chart(document.getElementById('chart'), {
-      type: 'line',
-      data: {
-        labels: history.map((_, i) => i),
-        datasets: [{
-          label: 'Temperature',
-          data: history,
-          tension: 0.4,
-          borderWidth: 2
-        }]
-      },
-      options: {
-        animation: {
-          duration: 1000   // 🔥 animation
-        }
-      }
-    });
-  } else {
-    chart.data.labels = history.map((_, i) => i);
-    chart.data.datasets[0].data = history;
-    chart.update();
-  }
+async function loadChart() {
+  const res = await fetch('./temp.csv');
+  const text = await res.text();
+
+  const lines = text.trim().split("\n");
+  const temps = lines.map(l => parseFloat(l.split(",")[1]));
+
+  new Chart(document.getElementById("chart"), {
+    type: 'line',
+    data: {
+      labels: temps.map((_,i)=>i),
+      datasets: [{
+        label: 'Temperature',
+        data: temps,
+        borderWidth: 2,
+        tension: 0.3
+      }]
+    }
+  });
 }
 
 loadData();
-setInterval(loadData, 60000);
+loadChart();
 
+setInterval(loadData, 60000);
 </script>
 
 </body>
