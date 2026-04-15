@@ -17,37 +17,46 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. สร้างสถานะแบบสุ่ม (Chaos Mode)
-      - name: Generate Status
-        id: status
+      # 2. นับ commit ล่าสุด
+      - name: Analyze activity
+        id: activity
         run: |
-          RAND=$((RANDOM % 3))
+          COUNT=$(git rev-list --count HEAD)
+          echo "COUNT=$COUNT" >> $GITHUB_ENV
 
-          if [ $RAND -eq 0 ]; then
+      # 3. Decision logic (AI-like)
+      - name: Decide status
+        run: |
+          if [ $COUNT -gt 10 ]; then
             echo "STATE=HEALTHY 🟢" >> $GITHUB_ENV
-          elif [ $RAND -eq 1 ]; then
+            echo "REASON=High activity" >> $GITHUB_ENV
+          elif [ $COUNT -gt 5 ]; then
             echo "STATE=WARNING 🟡" >> $GITHUB_ENV
+            echo "REASON=Moderate activity" >> $GITHUB_ENV
           else
             echo "STATE=CRITICAL 🔴" >> $GITHUB_ENV
+            echo "REASON=Low activity" >> $GITHUB_ENV
           fi
 
-      # 3. สร้าง README
+      # 4. สร้าง README
       - name: Generate README
         run: |
           echo "# 🚀 Go Auto Engine" > README.md
           echo "" >> README.md
           echo "## 🧠 System Status" >> README.md
           echo "- Status: $STATE" >> README.md
+          echo "- Reason: $REASON" >> README.md
+          echo "- Total Commits: $COUNT" >> README.md
           echo "- Time: $(date)" >> README.md
           echo "" >> README.md
           echo "## 🔄 Auto Update" >> README.md
           echo "This file is updated automatically by GitHub Actions." >> README.md
 
-      # 4. commit + push
+      # 5. commit + push
       - name: Commit and push
         run: |
           git config user.name "auto-engine-bot"
           git config user.email "bot@auto-engine.com"
           git add README.md
-          git commit -m "🤖 auto update ($STATE)" || echo "no changes"
+          git commit -m "🤖 AI update ($STATE)" || echo "no changes"
           git push
