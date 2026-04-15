@@ -1,0 +1,175 @@
+name: LA Weather Automet
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fetch weather
+        run: |
+          curl -sf "https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&current_weather=true" > weather.json
+          if [ ! -s weather.json ]; then
+            echo "ERROR: weather fetch failed" && exit 1
+          fi
+
+      - name: Parse data
+        run: |
+          TEMP=$(jq '.current_weather.temperature' weather.json)
+          WIND=$(jq '.current_weather.windspeed' weather.json)
+          DIRECTION=$(jq '.current_weather.winddirection' weather.json)
+          IS_DAY=$(jq '.current_weather.is_day' weather.json)
+
+          if [ -z "$TEMP" ] || [ "$TEMP" = "null" ]; then
+            echo "ERROR: failed to parse weather data" && exit 1
+          fi
+
+          echo "TEMP=$TEMP"         >> $GITHUB_ENV
+          echo "WIND=$WIND"         >> $GITHUB_ENV
+          echo "DIRECTION=$DIRECTION" >> $GITHUB_ENV
+          echo "IS_DAY=$IS_DAY"     >> $GITHUB_ENV
+
+      - name: AI logic
+        run: |
+          python3 - <<'EOF'
+          import os, math
+
+          temp  = float(os.environ["TEMP"])
+          wind  = float(os.environ["WIND"])
+          is_day = os.environ["IS_DAY"]
+
+          # Status
+          if temp > 30:
+              status = "HOT"
+          elif temp > 20:
+              status = "WARM"
+          elif temp < 5:
+              status = "COLD"
+          else:
+              status = "OK"
+
+          # Trend — compare last recorded temp
+          trend = "Stable"
+          try:
+              with open("temp.csv") as f:
+                  lines = [l for l in f.read().strip().splitlines() if "," in l]
+              if len(lines) >= 2:
+                  last_temp = float(lines[-1].split(",")[1])
+                  diff = temp - last_temp
+                  if diff > 1.5:
+                      trend = "Rising"
+                  elif diff < -1.5:
+                      trend = "Falling"
+          except Exception:
+              pass
+
+          # Heat index score (0–100)
+          score = min(100, max(0, int(temp * 2 + wind * 0.5)))
+
+          # Write env
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"STATUS={status}\n")
+              f.write(f"TREND={trend}\n")
+              f.write(f"SCORE={score}\n")
+
+          EOF
+
+      - name: Update files
+        run: |
+          TIMESTAMP=$(date -u "+%Y-%m-%dT%H:%M")
+
+          # --- temp.csv ---
+          # Create with header if missing
+          if [ ! -f temp.csv ]; then
+            echo "timestamp,temperature,wind" > temp.csv
+          fi
+          # Only append data rows (skip header re-write)
+          echo "$TIMESTAMP,$TEMP,$WIND" >> temp.csv
+
+          # --- graph.svg (last 20 points) ---
+          python3 - <<'EOF'
+          import csv
+
+          rows = []
+          try:
+              with open("temp.csv") as f:
+                  reader = csv.DictReader(f)
+                  for row in reader:
+                      try:
+                          rows.append(float(row["temperature"]))
+                      except (ValueError, KeyError):
+                          pass
+          except Exception:
+              pass
+
+          rows = rows[-20:]
+          if not rows:
+              rows = [0]
+
+          w, h, pad = 500, 200, 20
+          min_t = min(rows)
+          max_t = max(rows)
+          span  = max(max_t - min_t, 1)
+
+          def px(i, val):
+              x = pad + i * (w - 2*pad) / max(len(rows)-1, 1)
+              y = h - pad - (val - min_t) / span * (h - 2*pad)
+              return f"{x:.1f},{y:.1f}"
+
+          points = " ".join(px(i, v) for i, v in enumerate(rows))
+
+          svg = f"""<svg width="500" height="200" viewBox="0 0 500 200" xmlns="http://www.w3.org/2000/svg">
+            <rect width="500" height="200" fill="#0b1a2a"/>
+            <polyline fill="none" stroke="#00ffcc" stroke-width="2"
+              points="{points}"/>
+            <text x="10" y="15" font-size="10" fill="#aaa">Temp (°C) — last {len(rows)} readings</text>
+          </svg>"""
+
+          with open("graph.svg", "w") as f:
+              f.write(svg)
+          EOF
+
+          # --- data.json ---
+          python3 -c "
+          import json
+          d = {
+            'temp': float('$TEMP'),
+            'wind': float('$WIND'),
+            'direction': float('$DIRECTION'),
+            'is_day': $IS_DAY == 1,
+            'status': '$STATUS',
+            'trend': '$TREND',
+            'score': $SCORE,
+            'updated': '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          }
+          print(json.dumps(d, indent=2))
+          " > data.json
+
+          # --- history.txt (last 28 status dots for README heatmap) ---
+          DOT="🟢"
+          [ "$STATUS" = "HOT" ] && DOT="🔴"
+          [ "$STATUS" = "COLD" ] && DOT="🔵"
+
+          PREV=$(tail -1 history.txt 2>/dev/null || true)
+          echo "$PREV $DOT" | tr -s ' ' | cut -c1-112 > history_new.txt
+          echo "$TEMP" >> history_new.txt
+          mv history_new.txt history.txt
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions@users.noreply.github.com"
+
+          git add temp.csv graph.svg data.json history.txt weather.json
+          git diff --cached --quiet && echo "no change, skipping" && exit 0
+          git commit -m "data: ${TEMP}°C wind ${WIND}km/h [${STATUS}]"
+          git push
