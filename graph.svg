@@ -1,7 +1,1 @@
-<svg width="500" height="215" viewBox="0 0 500 215" xmlns="http://www.w3.org/2000/svg">
-  <rect width="500" height="215" fill="#0b1a2a"/>
-  <polyline fill="none" stroke="#00ffcc" stroke-width="2"
-    points="20.0,132.0 135.0,164.0 250.0,164.0 365.0,164.0 480.0,180.0"/>
-  <text x="10" y="15" font-size="10" fill="#aaa">Temp (°C) — last 5 readings</text>
-  <text x="10" y="210" font-size="9" fill="#556">Last updated: 2026-04-15 08:34 UTC</text>
-</svg>
+<svg width="500" height="215" viewBox="0 0 500 215" xmlns="http://www.w3.org/2000/svg"><rect width="500" height="215" fill="#0b1a2a"/><polyline fill="none" stroke="#00ffcc" stroke-width="2" points="20.0,20.0 112.0,52.0 204.0,52.0 296.0,52.0 388.0,68.0 480.0,180.0"/><text x="10" y="15" font-size="10" fill="#aaa">Temp (°C) — last 6 readings</text><text x="10" y="210" font-size="9" fill="#556">Last updated: 2026-04-15 09:48 UTC</text></svg>
