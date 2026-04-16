@@ -112,14 +112,15 @@ jobs:
 
       - name: Commit
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions@users.noreply.github.com"
+          git config user.name "nattapongsindhu"
+          git config user.email "septuplex7@gmail.com"
 
-          git pull --rebase=false origin main
           git add temp.csv graph.svg data.json history.txt weather.json
           git diff --cached --quiet && echo "no change, skipping" && exit 0
 
           LABEL="${STATUS}"
           [ -n "$ANOMALY" ] && LABEL="${STATUS}+ANOMALY"
           git commit -m "data: ${TEMP}°C wind ${WIND}km/h [${LABEL}]"
+          
+          git pull --rebase origin main
           git push
