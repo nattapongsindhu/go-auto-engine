@@ -2,9 +2,9 @@
 <rect width="500" height="215" fill="#0b1a2a"/>
 <text x="5" y="24" font-size="8" fill="#556">23.6</text>
 <text x="5" y="190" font-size="8" fill="#556">12.1</text>
-<polyline fill="none" stroke="#00ffcc" stroke-width="2" points="20.0,175.2 52.9,178.2 85.7,178.2 118.6,178.2 151.4,179.7 184.3,190.0 217.1,20.0 250.0,62.9 282.9,62.9 315.7,91.0 348.6,172.3 381.4,184.1 414.3,49.6 447.1,83.6 480.0,160.4"/>
-<polyline fill="none" stroke="#ff9944" stroke-width="1" stroke-dasharray="3,2" opacity="0.7" points="20.0,176.7 52.9,177.2 85.7,178.2 118.6,178.7 151.4,182.6 184.3,129.9 217.1,91.0 250.0,48.6 282.9,72.2 315.7,108.7 348.6,149.1 381.4,135.3 414.3,105.7 447.1,97.9 480.0,122.0"/>
-<text x="10" y="13" font-size="9" fill="#aaa">Temp (°C) — last 15 readings</text>
+<polyline fill="none" stroke="#00ffcc" stroke-width="2" points="20.0,175.2 50.7,178.2 81.3,178.2 112.0,178.2 142.7,179.7 173.3,190.0 204.0,20.0 234.7,62.9 265.3,62.9 296.0,91.0 326.7,172.3 357.3,184.1 388.0,49.6 418.7,83.6 449.3,160.4 480.0,182.6"/>
+<polyline fill="none" stroke="#ff9944" stroke-width="1" stroke-dasharray="3,2" opacity="0.7" points="20.0,176.7 50.7,177.2 81.3,178.2 112.0,178.7 142.7,182.6 173.3,129.9 204.0,91.0 234.7,48.6 265.3,72.2 296.0,108.7 326.7,149.1 357.3,135.3 388.0,105.7 418.7,97.9 449.3,142.2 480.0,171.5"/>
+<text x="10" y="13" font-size="9" fill="#aaa">Temp (°C) — last 16 readings</text>
 <text x="495" y="13" font-size="7" fill="#445" text-anchor="end">— MA3</text>
-<text x="10" y="212" font-size="8" fill="#445">Updated: 2026-04-17 07:19 UTC</text>
+<text x="10" y="212" font-size="8" fill="#445">Updated: 2026-04-17 12:56 UTC</text>
 </svg>
