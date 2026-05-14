@@ -1,12 +1,12 @@
 {
-  "temp": 21.9,
-  "wind": 5.9,
-  "direction": 256.0,
+  "temp": 17.9,
+  "wind": 11.0,
+  "direction": 259.0,
   "is_day": true,
-  "status": "WARM",
-  "trend": "Rising",
-  "score": 46,
+  "status": "OK",
+  "trend": "Falling",
+  "score": 41,
   "anomaly": "",
-  "updated": "2026-05-13T19:39:49Z",
-  "sha256": "b06fc1f525689783"
+  "updated": "2026-05-14T02:11:10Z",
+  "sha256": "362fd436ecde1dfc"
 }
